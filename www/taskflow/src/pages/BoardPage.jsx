@@ -27,6 +27,7 @@ export default function BoardPage() {
     listsLoading,
     listsError,
     moveCard,
+    addList,
     addCard,
   } = useBoardData();
 
@@ -44,6 +45,15 @@ export default function BoardPage() {
   const [composerListId, setComposerListId] = useState(null);
   const [composerText, setComposerText] = useState("");
   const [openCardId, setOpenCardId] = useState(null);
+  const [addingList, setAddingList] = useState(false);
+  const [listDraft, setListDraft] = useState("");
+
+  const submitList = () => {
+    const title = listDraft.trim();
+    if (title) addList(title);
+    setListDraft("");
+    setAddingList(false);
+  };
 
   const changeView = (next) => {
     setView(next);
@@ -184,14 +194,59 @@ export default function BoardPage() {
                 onCardClick={setOpenCardId}
               />
             ))}
-            <button
-              type="button"
-              className="flex flex-none items-center gap-2 rounded-2xl text-sm font-semibold cursor-pointer hover:bg-[var(--surface-3)]"
-              style={{ width: 290, padding: "13px 14px", border: "none", background: "var(--surface-2)", color: "var(--text-2)" }}
-            >
-              <Icon name="add" size={20} />
-              Add another list
-            </button>
+            {addingList ? (
+              <div
+                className="flex flex-none flex-col gap-2 rounded-2xl"
+                style={{ width: 290, padding: 12, background: "var(--surface-2)" }}
+              >
+                <input
+                  autoFocus
+                  value={listDraft}
+                  onChange={(e) => setListDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitList();
+                    if (e.key === "Escape") {
+                      setListDraft("");
+                      setAddingList(false);
+                    }
+                  }}
+                  placeholder="Enter list title…"
+                  className="w-full rounded-lg text-sm outline-none focus:border-[var(--primary)]"
+                  style={{ padding: "9px 11px", border: "1px solid var(--border-2)", background: "var(--surface)", color: "var(--text)" }}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={submitList}
+                    className="rounded-lg text-sm font-bold text-white cursor-pointer hover:bg-[var(--primary-2)]"
+                    style={{ height: 34, padding: "0 14px", border: "none", background: "var(--primary)" }}
+                  >
+                    Add list
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setListDraft("");
+                      setAddingList(false);
+                    }}
+                    className="flex items-center justify-center rounded-lg cursor-pointer hover:bg-[var(--surface-3)]"
+                    style={{ width: 34, height: 34, border: "none", background: "none", color: "var(--text-2)" }}
+                  >
+                    <Icon name="close" size={18} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingList(true)}
+                className="flex flex-none items-center gap-2 rounded-2xl text-sm font-semibold cursor-pointer hover:bg-[var(--surface-3)]"
+                style={{ width: 290, padding: "13px 14px", border: "none", background: "var(--surface-2)", color: "var(--text-2)" }}
+              >
+                <Icon name="add" size={20} />
+                Add another list
+              </button>
+            )}
           </div>
         ) : (
           <BoardListView

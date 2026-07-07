@@ -538,6 +538,25 @@ export function BoardDataProvider({ children }) {
     [persistPositions]
   );
 
+  // Insert a list (column) at the end of the board, then append it to local state.
+  const addList = useCallback(
+    async (title) => {
+      const t = title.trim();
+      if (!t) return {};
+      if (!activeBoardId) return { error: { message: "No board open." } };
+      const position = listsRef.current.length;
+      const { data, error } = await supabase
+        .from("lists")
+        .insert({ board_id: activeBoardId, title: t, position })
+        .select("id, title, position")
+        .single();
+      if (error) return { error };
+      setLists((cur) => [...cur, { id: data.id, title: data.title, cards: [] }]);
+      return { data };
+    },
+    [activeBoardId]
+  );
+
   // Insert a card at the end of a list, then append the real row to local state.
   const addCard = useCallback(
     async (listId, title) => {
@@ -825,6 +844,7 @@ export function BoardDataProvider({ children }) {
     listsLoading,
     listsError,
     moveCard,
+    addList,
     addCard,
     updateCard,
     deleteCard,
