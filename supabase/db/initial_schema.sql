@@ -68,6 +68,7 @@ create table public.cards (
   description text,
   due_date timestamptz,
   position integer not null default 0,
+  is_archived boolean not null default false,
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -110,3 +111,40 @@ create table public.comments (
 
 create index comments_card_id_idx on public.comments (card_id);
 create index comments_user_id_idx on public.comments (user_id);
+
+-- 10. labels (a board's palette of labels, à la Trello)
+create table public.labels (
+  id uuid primary key default gen_random_uuid(),
+  board_id uuid not null references public.boards (id) on delete cascade,
+  name text not null default '',
+  color text not null,
+  position integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index labels_board_id_idx on public.labels (board_id);
+
+-- 11. card_labels (card <-> label many-to-many)
+create table public.card_labels (
+  card_id uuid not null references public.cards (id) on delete cascade,
+  label_id uuid not null references public.labels (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (card_id, label_id)
+);
+
+create index card_labels_label_id_idx on public.card_labels (label_id);
+
+-- 12. attachments (metadata for files kept in the card-attachments storage bucket)
+create table public.attachments (
+  id uuid primary key default gen_random_uuid(),
+  card_id uuid not null references public.cards (id) on delete cascade,
+  file_name text not null,
+  file_size bigint,
+  mime_type text,
+  storage_path text not null,
+  uploaded_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index attachments_card_id_idx on public.attachments (card_id);

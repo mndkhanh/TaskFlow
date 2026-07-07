@@ -24,6 +24,8 @@ create trigger set_updated_at before update on public.checklists
   for each row execute function public.set_updated_at();
 create trigger set_updated_at before update on public.comments
   for each row execute function public.set_updated_at();
+create trigger set_updated_at before update on public.labels
+  for each row execute function public.set_updated_at();
 
 -- Auto-provision a profile + default personal workspace for every new user (prd.md 3.1)
 

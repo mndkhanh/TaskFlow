@@ -357,3 +357,119 @@ $$;
 -- Only signed-in users may call it (it would reject anon anyway via the auth.uid() check).
 revoke execute on function public.create_workspace(text, text) from public, anon;
 grant execute on function public.create_workspace(text, text) to authenticated;
+
+-- ============================================================================
+-- Card labels, attachments & archival RLS (tables live in initial_schema.sql;
+-- the labels updated_at trigger lives in functions_triggers.sql). Kept here
+-- because every policy below calls the private.* RLS helpers created above, so
+-- it must be applied after them.
+-- ============================================================================
+
+-- RLS helper: label -> owning workspace (mirrors the other private.* helpers).
+create or replace function private.label_workspace_id(_label_id uuid)
+returns uuid
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select b.workspace_id
+  from public.labels lb
+  join public.boards b on b.id = lb.board_id
+  where lb.id = _label_id;
+$$;
+
+alter table public.labels enable row level security;
+alter table public.card_labels enable row level security;
+alter table public.attachments enable row level security;
+
+-- labels (board-scoped)
+create policy "Members can view labels"
+  on public.labels for select
+  to authenticated
+  using (private.is_workspace_member(private.board_workspace_id(board_id)));
+
+create policy "Owners and members can create labels"
+  on public.labels for insert
+  to authenticated
+  with check (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
+
+create policy "Owners and members can update labels"
+  on public.labels for update
+  to authenticated
+  using (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'))
+  with check (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
+
+create policy "Owners and members can delete labels"
+  on public.labels for delete
+  to authenticated
+  using (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
+
+-- card_labels (card-scoped)
+create policy "Members can view card labels"
+  on public.card_labels for select
+  to authenticated
+  using (private.is_workspace_member(private.card_workspace_id(card_id)));
+
+create policy "Owners and members can add card labels"
+  on public.card_labels for insert
+  to authenticated
+  with check (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
+
+create policy "Owners and members can remove card labels"
+  on public.card_labels for delete
+  to authenticated
+  using (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
+
+-- attachments (card-scoped)
+create policy "Members can view attachments"
+  on public.attachments for select
+  to authenticated
+  using (private.is_workspace_member(private.card_workspace_id(card_id)));
+
+create policy "Owners and members can add attachments"
+  on public.attachments for insert
+  to authenticated
+  with check (
+    private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member')
+    and uploaded_by = auth.uid()
+  );
+
+create policy "Uploaders and owners can delete attachments"
+  on public.attachments for delete
+  to authenticated
+  using (
+    uploaded_by = auth.uid()
+    or private.current_workspace_role(private.card_workspace_id(card_id)) = 'owner'
+  );
+
+-- Private storage bucket + membership-gated policies. Path convention:
+--   {workspace_id}/{card_id}/{uuid}-{original_filename}
+-- so (storage.foldername(name))[1] is always the owning workspace id.
+insert into storage.buckets (id, name, public)
+values ('card-attachments', 'card-attachments', false)
+on conflict (id) do nothing;
+
+create policy "Members can read card attachments"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'card-attachments'
+    and private.is_workspace_member(((storage.foldername(name))[1])::uuid)
+  );
+
+create policy "Members can upload card attachments"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'card-attachments'
+    and private.current_workspace_role(((storage.foldername(name))[1])::uuid) in ('owner', 'member')
+  );
+
+create policy "Members can delete card attachments"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'card-attachments'
+    and private.current_workspace_role(((storage.foldername(name))[1])::uuid) in ('owner', 'member')
+  );
