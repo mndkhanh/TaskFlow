@@ -1,12 +1,43 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useReducer, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "./AuthContext";
-import { BOARDS, LABELS, MEMBERS, createInitialLists } from "../lib/mockData";
+import { LABELS, MEMBERS, createInitialLists } from "../lib/mockData";
 
 const BoardDataContext = createContext(null);
 
 // Palette used to give each workspace a stable accent color in the sidebar/header.
 const WORKSPACE_COLORS = ["#0c55a3", "#0f9d58", "#d97706", "#7c3aed", "#e61c23", "#0891b2"];
+
+// Boards have no stored theme yet (only an optional background_url), so we hand each
+// one a stable gradient/accent by its position in the workspace's board list.
+const BOARD_GRADIENTS = [
+  { color: "#0c55a3", gradient: "linear-gradient(135deg,#0c55a3,#3a86d4)" },
+  { color: "#e61c23", gradient: "linear-gradient(135deg,#e61c23,#ff7a5c)" },
+  { color: "#6d28d9", gradient: "linear-gradient(135deg,#6d28d9,#a855f7)" },
+  { color: "#0f766e", gradient: "linear-gradient(135deg,#0f766e,#2dd4bf)" },
+  { color: "#b45309", gradient: "linear-gradient(135deg,#b45309,#f59e0b)" },
+  { color: "#334155", gradient: "linear-gradient(135deg,#334155,#64748b)" },
+];
+
+// Map board rows into the display shape the dashboard tiles / board header expect.
+// cardCount and avatars stay empty until lists/cards are wired to real data.
+function mapBoards(rows) {
+  return rows.map((b, i) => {
+    const theme = BOARD_GRADIENTS[i % BOARD_GRADIENTS.length];
+    return {
+      id: b.id,
+      workspaceId: b.workspace_id,
+      name: b.title,
+      gradient: b.background_url || theme.gradient,
+      color: theme.color,
+      archived: b.is_archived,
+      cardCount: 0,
+      avatars: [],
+    };
+  });
+}
+
+const BOARD_COLUMNS = "id, workspace_id, title, background_url, is_archived, created_at";
 
 function capitalize(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
@@ -190,11 +221,67 @@ export function BoardDataProvider({ children }) {
     [fetchWorkspaces, applyWorkspaces]
   );
 
-  // Boards/lists/cards are still mock; they key off workspace id, so real workspaces
-  // (UUIDs) currently resolve to an empty board list until board-fetching is wired.
-  const boardsByWorkspace = useMemo(
-    () => BOARDS.filter((b) => b.workspaceId === activeWorkspaceId),
-    [activeWorkspaceId]
+  const [boards, setBoards] = useState([]);
+  const [boardsLoading, setBoardsLoading] = useState(false);
+  const [boardsError, setBoardsError] = useState(null);
+
+  // Boards for a workspace. RLS ("Members can view boards") already restricts rows to
+  // workspaces the user belongs to; we filter by the active one and order by creation.
+  const fetchBoards = useCallback(async (workspaceId) => {
+    const { data, error } = await supabase
+      .from("boards")
+      .select(BOARD_COLUMNS)
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+    if (error) return { error };
+    return { boards: mapBoards(data ?? []) };
+  }, []);
+
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      setBoards([]);
+      setBoardsError(null);
+      setBoardsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setBoardsLoading(true);
+    setBoardsError(null);
+
+    fetchBoards(activeWorkspaceId).then((res) => {
+      if (cancelled) return;
+      if (res.error) {
+        setBoardsError(res.error.message);
+        setBoards([]);
+      } else {
+        setBoards(res.boards);
+      }
+      setBoardsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, fetchBoards]);
+
+  // Create a board in the active workspace (RLS lets owners/members insert), then
+  // refetch so ordering and the position-based gradient stay consistent.
+  const createBoard = useCallback(
+    async (title) => {
+      if (!activeWorkspaceId) return { error: { message: "Select a workspace first." } };
+      const { data, error } = await supabase
+        .from("boards")
+        .insert({ workspace_id: activeWorkspaceId, title, created_by: userId })
+        .select(BOARD_COLUMNS)
+        .single();
+      if (error) return { error };
+
+      const res = await fetchBoards(activeWorkspaceId);
+      if (!res.error) setBoards(res.boards);
+      return { data };
+    },
+    [activeWorkspaceId, userId, fetchBoards]
   );
 
   const value = {
@@ -206,8 +293,10 @@ export function BoardDataProvider({ children }) {
     activeWorkspaceId,
     selectWorkspace: setActiveWorkspaceId,
     createWorkspace,
-    boards: boardsByWorkspace,
-    allBoards: BOARDS,
+    boards,
+    boardsLoading,
+    boardsError,
+    createBoard,
     lists,
     moveCard: (cardId, targetListId, beforeCardId) => dispatch({ type: "MOVE_CARD", cardId, targetListId, beforeCardId }),
     addCard: (listId, title) => dispatch({ type: "ADD_CARD", listId, title }),

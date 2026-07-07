@@ -7,7 +7,44 @@ import IconButton from "../ui/IconButton";
 
 const TEAM_IDS = ["ava", "marcus", "priya", "diego", "sam"];
 
-export default function BoardHeader({ board, workspaceName }) {
+function ViewToggle({ view, onViewChange }) {
+  const options = [
+    { key: "kanban", icon: "view_kanban", label: "Board" },
+    { key: "list", icon: "view_list", label: "List" },
+  ];
+  return (
+    <div
+      className="flex items-center"
+      style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 2, gap: 2 }}
+    >
+      {options.map((opt) => {
+        const active = view === opt.key;
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => onViewChange(opt.key)}
+            aria-pressed={active}
+            className="flex items-center gap-1.5 rounded-md text-sm font-semibold cursor-pointer"
+            style={{
+              height: 30,
+              padding: "0 10px",
+              border: "none",
+              background: active ? "var(--surface)" : "transparent",
+              color: active ? "var(--text)" : "var(--text-3)",
+              boxShadow: active ? "var(--shadow)" : "none",
+            }}
+          >
+            <Icon name={opt.icon} size={17} />
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function BoardHeader({ board, workspaceName, view, onViewChange }) {
   const { members } = useBoardData();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -23,6 +60,7 @@ export default function BoardHeader({ board, workspaceName }) {
         <div className="text-base font-extrabold tracking-tight leading-tight">{board.name}</div>
         <div className="text-xs" style={{ color: "var(--text-3)" }}>{workspaceName}</div>
       </div>
+      {view && onViewChange && <ViewToggle view={view} onViewChange={onViewChange} />}
       <button
         type="button"
         className="flex items-center gap-1.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
