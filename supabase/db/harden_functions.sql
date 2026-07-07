@@ -115,45 +115,45 @@ $$;
 
 -- Repoint every RLS policy at the relocated private helpers
 
-drop policy "Members can view their workspaces" on public.workspaces;
+drop policy if exists "Members can view their workspaces" on public.workspaces;
 create policy "Members can view their workspaces"
   on public.workspaces for select
   to authenticated
   using (private.is_workspace_member(id));
 
-drop policy "Owners can update their workspace" on public.workspaces;
+drop policy if exists "Owners can update their workspace" on public.workspaces;
 create policy "Owners can update their workspace"
   on public.workspaces for update
   to authenticated
   using (private.current_workspace_role(id) = 'owner')
   with check (private.current_workspace_role(id) = 'owner');
 
-drop policy "Owners can delete their workspace" on public.workspaces;
+drop policy if exists "Owners can delete their workspace" on public.workspaces;
 create policy "Owners can delete their workspace"
   on public.workspaces for delete
   to authenticated
   using (private.current_workspace_role(id) = 'owner');
 
-drop policy "Members can view workspace membership" on public.workspace_members;
+drop policy if exists "Members can view workspace membership" on public.workspace_members;
 create policy "Members can view workspace membership"
   on public.workspace_members for select
   to authenticated
   using (private.is_workspace_member(workspace_id));
 
-drop policy "Owners can add workspace members" on public.workspace_members;
+drop policy if exists "Owners can add workspace members" on public.workspace_members;
 create policy "Owners can add workspace members"
   on public.workspace_members for insert
   to authenticated
   with check (private.current_workspace_role(workspace_id) = 'owner');
 
-drop policy "Owners can update member roles" on public.workspace_members;
+drop policy if exists "Owners can update member roles" on public.workspace_members;
 create policy "Owners can update member roles"
   on public.workspace_members for update
   to authenticated
   using (private.current_workspace_role(workspace_id) = 'owner')
   with check (private.current_workspace_role(workspace_id) = 'owner');
 
-drop policy "Owners can remove members, members can leave" on public.workspace_members;
+drop policy if exists "Owners can remove members, members can leave" on public.workspace_members;
 create policy "Owners can remove members, members can leave"
   on public.workspace_members for delete
   to authenticated
@@ -162,131 +162,131 @@ create policy "Owners can remove members, members can leave"
     or user_id = auth.uid()
   );
 
-drop policy "Members can view boards" on public.boards;
+drop policy if exists "Members can view boards" on public.boards;
 create policy "Members can view boards"
   on public.boards for select
   to authenticated
   using (private.is_workspace_member(workspace_id));
 
-drop policy "Owners and members can create boards" on public.boards;
+drop policy if exists "Owners and members can create boards" on public.boards;
 create policy "Owners and members can create boards"
   on public.boards for insert
   to authenticated
   with check (private.current_workspace_role(workspace_id) in ('owner', 'member'));
 
-drop policy "Owners and members can update boards" on public.boards;
+drop policy if exists "Owners and members can update boards" on public.boards;
 create policy "Owners and members can update boards"
   on public.boards for update
   to authenticated
   using (private.current_workspace_role(workspace_id) in ('owner', 'member'))
   with check (private.current_workspace_role(workspace_id) in ('owner', 'member'));
 
-drop policy "Owners and members can delete boards" on public.boards;
+drop policy if exists "Owners and members can delete boards" on public.boards;
 create policy "Owners and members can delete boards"
   on public.boards for delete
   to authenticated
   using (private.current_workspace_role(workspace_id) in ('owner', 'member'));
 
-drop policy "Members can view lists" on public.lists;
+drop policy if exists "Members can view lists" on public.lists;
 create policy "Members can view lists"
   on public.lists for select
   to authenticated
   using (private.is_workspace_member(private.board_workspace_id(board_id)));
 
-drop policy "Owners and members can create lists" on public.lists;
+drop policy if exists "Owners and members can create lists" on public.lists;
 create policy "Owners and members can create lists"
   on public.lists for insert
   to authenticated
   with check (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
 
-drop policy "Owners and members can update lists" on public.lists;
+drop policy if exists "Owners and members can update lists" on public.lists;
 create policy "Owners and members can update lists"
   on public.lists for update
   to authenticated
   using (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'))
   with check (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
 
-drop policy "Owners and members can delete lists" on public.lists;
+drop policy if exists "Owners and members can delete lists" on public.lists;
 create policy "Owners and members can delete lists"
   on public.lists for delete
   to authenticated
   using (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
 
-drop policy "Members can view cards" on public.cards;
+drop policy if exists "Members can view cards" on public.cards;
 create policy "Members can view cards"
   on public.cards for select
   to authenticated
   using (private.is_workspace_member(private.list_workspace_id(list_id)));
 
-drop policy "Owners and members can create cards" on public.cards;
+drop policy if exists "Owners and members can create cards" on public.cards;
 create policy "Owners and members can create cards"
   on public.cards for insert
   to authenticated
   with check (private.current_workspace_role(private.list_workspace_id(list_id)) in ('owner', 'member'));
 
-drop policy "Owners and members can update cards" on public.cards;
+drop policy if exists "Owners and members can update cards" on public.cards;
 create policy "Owners and members can update cards"
   on public.cards for update
   to authenticated
   using (private.current_workspace_role(private.list_workspace_id(list_id)) in ('owner', 'member'))
   with check (private.current_workspace_role(private.list_workspace_id(list_id)) in ('owner', 'member'));
 
-drop policy "Owners and members can delete cards" on public.cards;
+drop policy if exists "Owners and members can delete cards" on public.cards;
 create policy "Owners and members can delete cards"
   on public.cards for delete
   to authenticated
   using (private.current_workspace_role(private.list_workspace_id(list_id)) in ('owner', 'member'));
 
-drop policy "Members can view card assignees" on public.card_assignees;
+drop policy if exists "Members can view card assignees" on public.card_assignees;
 create policy "Members can view card assignees"
   on public.card_assignees for select
   to authenticated
   using (private.is_workspace_member(private.card_workspace_id(card_id)));
 
-drop policy "Owners and members can assign cards" on public.card_assignees;
+drop policy if exists "Owners and members can assign cards" on public.card_assignees;
 create policy "Owners and members can assign cards"
   on public.card_assignees for insert
   to authenticated
   with check (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
 
-drop policy "Owners and members can unassign cards" on public.card_assignees;
+drop policy if exists "Owners and members can unassign cards" on public.card_assignees;
 create policy "Owners and members can unassign cards"
   on public.card_assignees for delete
   to authenticated
   using (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
 
-drop policy "Members can view checklist items" on public.checklists;
+drop policy if exists "Members can view checklist items" on public.checklists;
 create policy "Members can view checklist items"
   on public.checklists for select
   to authenticated
   using (private.is_workspace_member(private.card_workspace_id(card_id)));
 
-drop policy "Owners and members can create checklist items" on public.checklists;
+drop policy if exists "Owners and members can create checklist items" on public.checklists;
 create policy "Owners and members can create checklist items"
   on public.checklists for insert
   to authenticated
   with check (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
 
-drop policy "Owners and members can update checklist items" on public.checklists;
+drop policy if exists "Owners and members can update checklist items" on public.checklists;
 create policy "Owners and members can update checklist items"
   on public.checklists for update
   to authenticated
   using (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'))
   with check (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
 
-drop policy "Owners and members can delete checklist items" on public.checklists;
+drop policy if exists "Owners and members can delete checklist items" on public.checklists;
 create policy "Owners and members can delete checklist items"
   on public.checklists for delete
   to authenticated
   using (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
 
-drop policy "Members can view comments" on public.comments;
+drop policy if exists "Members can view comments" on public.comments;
 create policy "Members can view comments"
   on public.comments for select
   to authenticated
   using (private.is_workspace_member(private.card_workspace_id(card_id)));
 
-drop policy "Owners and members can post comments" on public.comments;
+drop policy if exists "Owners and members can post comments" on public.comments;
 create policy "Owners and members can post comments"
   on public.comments for insert
   to authenticated
@@ -295,7 +295,7 @@ create policy "Owners and members can post comments"
     and user_id = auth.uid()
   );
 
-drop policy "Authors and owners can delete comments" on public.comments;
+drop policy if exists "Authors and owners can delete comments" on public.comments;
 create policy "Authors and owners can delete comments"
   on public.comments for delete
   to authenticated
@@ -384,49 +384,58 @@ alter table public.card_labels enable row level security;
 alter table public.attachments enable row level security;
 
 -- labels (board-scoped)
+drop policy if exists "Members can view labels" on public.labels;
 create policy "Members can view labels"
   on public.labels for select
   to authenticated
   using (private.is_workspace_member(private.board_workspace_id(board_id)));
 
+drop policy if exists "Owners and members can create labels" on public.labels;
 create policy "Owners and members can create labels"
   on public.labels for insert
   to authenticated
   with check (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
 
+drop policy if exists "Owners and members can update labels" on public.labels;
 create policy "Owners and members can update labels"
   on public.labels for update
   to authenticated
   using (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'))
   with check (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
 
+drop policy if exists "Owners and members can delete labels" on public.labels;
 create policy "Owners and members can delete labels"
   on public.labels for delete
   to authenticated
   using (private.current_workspace_role(private.board_workspace_id(board_id)) in ('owner', 'member'));
 
 -- card_labels (card-scoped)
+drop policy if exists "Members can view card labels" on public.card_labels;
 create policy "Members can view card labels"
   on public.card_labels for select
   to authenticated
   using (private.is_workspace_member(private.card_workspace_id(card_id)));
 
+drop policy if exists "Owners and members can add card labels" on public.card_labels;
 create policy "Owners and members can add card labels"
   on public.card_labels for insert
   to authenticated
   with check (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
 
+drop policy if exists "Owners and members can remove card labels" on public.card_labels;
 create policy "Owners and members can remove card labels"
   on public.card_labels for delete
   to authenticated
   using (private.current_workspace_role(private.card_workspace_id(card_id)) in ('owner', 'member'));
 
 -- attachments (card-scoped)
+drop policy if exists "Members can view attachments" on public.attachments;
 create policy "Members can view attachments"
   on public.attachments for select
   to authenticated
   using (private.is_workspace_member(private.card_workspace_id(card_id)));
 
+drop policy if exists "Owners and members can add attachments" on public.attachments;
 create policy "Owners and members can add attachments"
   on public.attachments for insert
   to authenticated
@@ -435,6 +444,7 @@ create policy "Owners and members can add attachments"
     and uploaded_by = auth.uid()
   );
 
+drop policy if exists "Uploaders and owners can delete attachments" on public.attachments;
 create policy "Uploaders and owners can delete attachments"
   on public.attachments for delete
   to authenticated
@@ -450,6 +460,7 @@ insert into storage.buckets (id, name, public)
 values ('card-attachments', 'card-attachments', false)
 on conflict (id) do nothing;
 
+drop policy if exists "Members can read card attachments" on storage.objects;
 create policy "Members can read card attachments"
   on storage.objects for select
   to authenticated
@@ -458,6 +469,7 @@ create policy "Members can read card attachments"
     and private.is_workspace_member(((storage.foldername(name))[1])::uuid)
   );
 
+drop policy if exists "Members can upload card attachments" on storage.objects;
 create policy "Members can upload card attachments"
   on storage.objects for insert
   to authenticated
@@ -466,6 +478,7 @@ create policy "Members can upload card attachments"
     and private.current_workspace_role(((storage.foldername(name))[1])::uuid) in ('owner', 'member')
   );
 
+drop policy if exists "Members can delete card attachments" on storage.objects;
 create policy "Members can delete card attachments"
   on storage.objects for delete
   to authenticated
@@ -497,11 +510,13 @@ on conflict (id) do update set public = true;
 
 -- Public read is served directly from the public bucket; this policy additionally
 -- lets authenticated members list/read via the authenticated API surface.
+drop policy if exists "Anyone can read board banners" on storage.objects;
 create policy "Anyone can read board banners"
   on storage.objects for select
   to public
   using (bucket_id = 'board-banners');
 
+drop policy if exists "Members can upload board banners" on storage.objects;
 create policy "Members can upload board banners"
   on storage.objects for insert
   to authenticated
@@ -510,6 +525,7 @@ create policy "Members can upload board banners"
     and private.current_workspace_role(((storage.foldername(name))[1])::uuid) in ('owner', 'member')
   );
 
+drop policy if exists "Members can update board banners" on storage.objects;
 create policy "Members can update board banners"
   on storage.objects for update
   to authenticated
@@ -522,6 +538,7 @@ create policy "Members can update board banners"
     and private.current_workspace_role(((storage.foldername(name))[1])::uuid) in ('owner', 'member')
   );
 
+drop policy if exists "Members can delete board banners" on storage.objects;
 create policy "Members can delete board banners"
   on storage.objects for delete
   to authenticated
@@ -544,7 +561,7 @@ create policy "Members can delete board banners"
 -- RLS uses the private.* helpers created above, so this must stay after them.
 -- ============================================================================
 
-create table public.activities (
+create table if not exists public.activities (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
   board_id uuid references public.boards (id) on delete set null,
@@ -555,27 +572,29 @@ create table public.activities (
   created_at timestamptz not null default now()
 );
 
-create index activities_workspace_created_idx on public.activities (workspace_id, created_at desc);
+create index if not exists activities_workspace_created_idx on public.activities (workspace_id, created_at desc);
 
-create table public.activity_reads (
+create table if not exists public.activity_reads (
   activity_id uuid not null references public.activities (id) on delete cascade,
   user_id uuid not null references auth.users (id) on delete cascade,
   read_at timestamptz not null default now(),
   primary key (activity_id, user_id)
 );
 
-create index activity_reads_user_idx on public.activity_reads (user_id);
+create index if not exists activity_reads_user_idx on public.activity_reads (user_id);
 
 alter table public.activities enable row level security;
 alter table public.activity_reads enable row level security;
 
 -- activities: any workspace member can read the feed; owners/members can log an
 -- event, but only ever attributed to themselves.
+drop policy if exists "Members can view activities" on public.activities;
 create policy "Members can view activities"
   on public.activities for select
   to authenticated
   using (private.is_workspace_member(workspace_id));
 
+drop policy if exists "Members can log activities" on public.activities;
 create policy "Members can log activities"
   on public.activities for insert
   to authenticated
@@ -585,16 +604,19 @@ create policy "Members can log activities"
   );
 
 -- activity_reads: a user manages only their own read markers (read + unread).
+drop policy if exists "Users can view their read markers" on public.activity_reads;
 create policy "Users can view their read markers"
   on public.activity_reads for select
   to authenticated
   using (user_id = auth.uid());
 
+drop policy if exists "Users can mark activities read" on public.activity_reads;
 create policy "Users can mark activities read"
   on public.activity_reads for insert
   to authenticated
   with check (user_id = auth.uid());
 
+drop policy if exists "Users can mark activities unread" on public.activity_reads;
 create policy "Users can mark activities unread"
   on public.activity_reads for delete
   to authenticated
