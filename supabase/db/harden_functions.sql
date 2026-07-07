@@ -311,3 +311,49 @@ drop function if exists public.board_workspace_id(uuid);
 drop function if exists public.list_workspace_id(uuid);
 drop function if exists public.card_workspace_id(uuid);
 drop function if exists public.handle_new_user();
+
+-- Client-callable RPC: create a workspace + its owner membership atomically.
+--
+-- Why an RPC instead of a plain client insert: RLS on workspace_members only lets
+-- an existing owner insert member rows (private.current_workspace_role(workspace_id)
+-- = 'owner'). Right after creating a workspace the caller has no membership yet, so
+-- they can neither add themselves as owner nor even see the workspace (the SELECT
+-- policy needs membership too) — a chicken-and-egg a plain insert can't resolve.
+--
+-- SECURITY DEFINER (like private.handle_new_user) writes both rows in one call. Unlike
+-- the RLS helpers above it is intentionally left in `public` so the Data API exposes it
+-- as an RPC, and is safe because it only ever acts on auth.uid(): a caller can only ever
+-- create a workspace owned by themselves. search_path is pinned and names schema-qualified.
+
+create or replace function public.create_workspace(p_name text, p_description text default null)
+returns public.workspaces
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_name text := nullif(btrim(p_name), '');
+  v_workspace public.workspaces;
+begin
+  if v_user_id is null then
+    raise exception 'Not authenticated' using errcode = '42501';
+  end if;
+  if v_name is null then
+    raise exception 'Workspace name is required' using errcode = '23514';
+  end if;
+
+  insert into public.workspaces (name, description, created_by)
+  values (v_name, nullif(btrim(p_description), ''), v_user_id)
+  returning * into v_workspace;
+
+  insert into public.workspace_members (workspace_id, user_id, role)
+  values (v_workspace.id, v_user_id, 'owner');
+
+  return v_workspace;
+end;
+$$;
+
+-- Only signed-in users may call it (it would reject anon anyway via the auth.uid() check).
+revoke execute on function public.create_workspace(text, text) from public, anon;
+grant execute on function public.create_workspace(text, text) to authenticated;

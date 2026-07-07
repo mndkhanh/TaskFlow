@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { BOARDS, LABELS, MEMBERS, createInitialLists } from "../lib/mockData";
@@ -123,6 +123,26 @@ export function BoardDataProvider({ children }) {
   // Fetch the signed-in user's workspaces. RLS scopes workspace_members to the
   // workspaces they belong to, so a single unfiltered query gives us every member
   // row across all their workspaces — enough for the list, their role, and counts.
+  const fetchWorkspaces = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("workspace_members")
+      .select("user_id, role, workspaces(id, name, created_at)");
+    if (error) return { error };
+    return { workspaces: mapWorkspaces(data ?? [], userId) };
+  }, [userId]);
+
+  // Apply a freshly-fetched list, keeping the current selection if it's still valid
+  // (or honoring an explicit preferId, e.g. a just-created workspace).
+  const applyWorkspaces = useCallback((mapped, preferId = null) => {
+    setWorkspaces(mapped);
+    setWorkspacesError(null);
+    setActiveWorkspaceId((cur) => {
+      if (preferId && mapped.some((w) => w.id === preferId)) return preferId;
+      if (cur && mapped.some((w) => w.id === cur)) return cur;
+      return mapped[0]?.id ?? null;
+    });
+  }, []);
+
   useEffect(() => {
     if (!userId) {
       setWorkspaces([]);
@@ -135,31 +155,40 @@ export function BoardDataProvider({ children }) {
     setWorkspacesLoading(true);
     setWorkspacesError(null);
 
-    (async () => {
-      const { data, error } = await supabase
-        .from("workspace_members")
-        .select("user_id, role, workspaces(id, name, created_at)");
-
+    fetchWorkspaces().then((res) => {
       if (cancelled) return;
-
-      if (error) {
-        setWorkspacesError(error.message);
+      if (res.error) {
+        setWorkspacesError(res.error.message);
         setWorkspaces([]);
         setActiveWorkspaceId(null);
       } else {
-        const mapped = mapWorkspaces(data ?? [], userId);
-        setWorkspaces(mapped);
-        setActiveWorkspaceId((cur) =>
-          cur && mapped.some((w) => w.id === cur) ? cur : mapped[0]?.id ?? null
-        );
+        applyWorkspaces(res.workspaces);
       }
       setWorkspacesLoading(false);
-    })();
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, fetchWorkspaces, applyWorkspaces]);
+
+  // Create a workspace via the SECURITY DEFINER RPC (see supabase/db/workspace_functions.sql),
+  // then refetch (without the full-page loading gate) and switch to the new workspace.
+  const createWorkspace = useCallback(
+    async (name, description = null) => {
+      const { data, error } = await supabase.rpc("create_workspace", {
+        p_name: name,
+        p_description: description,
+      });
+      if (error) return { error };
+
+      const res = await fetchWorkspaces();
+      if (res.error) return { error: res.error };
+      applyWorkspaces(res.workspaces, data.id);
+      return { data };
+    },
+    [fetchWorkspaces, applyWorkspaces]
+  );
 
   // Boards/lists/cards are still mock; they key off workspace id, so real workspaces
   // (UUIDs) currently resolve to an empty board list until board-fetching is wired.
@@ -176,6 +205,7 @@ export function BoardDataProvider({ children }) {
     workspacesError,
     activeWorkspaceId,
     selectWorkspace: setActiveWorkspaceId,
+    createWorkspace,
     boards: boardsByWorkspace,
     allBoards: BOARDS,
     lists,

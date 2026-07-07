@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useBoardData } from "../../context/BoardDataContext";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import Icon from "../ui/Icon";
 
 const NAV_ITEMS = [
@@ -10,7 +10,6 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar() {
-  const { workspaces, activeWorkspaceId, selectWorkspace } = useBoardData();
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -67,43 +66,7 @@ export default function Sidebar() {
         </span>
       </div>
 
-      <div
-        className="text-xs font-bold"
-        style={{
-          color: "var(--text-3)",
-          letterSpacing: "0.06em",
-          padding: "0 8px",
-          marginBottom: 8,
-        }}
-      >
-        WORKSPACES
-      </div>
-      {workspaces.map((ws) => (
-        <button
-          key={ws.id}
-          type="button"
-          onClick={() => selectWorkspace(ws.id)}
-          className="flex w-full items-center gap-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
-          style={{
-            padding: 8,
-            border: "none",
-            marginBottom: 2,
-            ...(ws.id === activeWorkspaceId
-              ? { background: "var(--primary-soft)", color: "var(--primary)" }
-              : { background: "none", color: "var(--text-2)" }),
-          }}
-        >
-          <span
-            className="flex flex-none items-center justify-center rounded-md text-xs font-bold text-white"
-            style={{ width: 26, height: 26, background: ws.color }}
-          >
-            {ws.initial}
-          </span>
-          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left">
-            {ws.name}
-          </span>
-        </button>
-      ))}
+      <WorkspaceSwitcher />
 
       <div
         style={{ height: 1, background: "var(--border)", margin: "16px 8px" }}
