@@ -1,19 +1,54 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import Icon from "../components/ui/Icon";
 
 export default function LoginPage() {
   const [isSignup, setIsSignup] = useState(false);
-  const { login } = useAuth();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { isAuthenticated, signInWithPassword, signUpWithPassword, signInWithGoogle } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+
+  const switchMode = (signup) => {
+    setIsSignup(signup);
+    setError("");
+    setInfo("");
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    login();
+    setError("");
+    setInfo("");
+    setSubmitting(true);
+
+    if (isSignup) {
+      const { error: signUpError, needsEmailConfirmation } = await signUpWithPassword(email, password, fullName);
+      setSubmitting(false);
+      if (signUpError) return setError(signUpError.message);
+      if (needsEmailConfirmation) return setInfo("Check your email to confirm your account, then log in.");
+      navigate("/dashboard");
+      return;
+    }
+
+    const { error: signInError } = await signInWithPassword(email, password);
+    setSubmitting(false);
+    if (signInError) return setError(signInError.message);
     navigate("/dashboard");
+  };
+
+  const handleGoogle = async () => {
+    setError("");
+    const { error: oauthError } = await signInWithGoogle();
+    if (oauthError) setError(oauthError.message);
   };
 
   const authTitle = isSignup ? "Create your account" : "Welcome back";
@@ -231,7 +266,7 @@ export default function LoginPage() {
           >
             <button
               type="button"
-              onClick={() => setIsSignup(false)}
+              onClick={() => switchMode(false)}
               className="flex-1 rounded-lg text-sm font-bold cursor-pointer"
               style={{
                 height: 36,
@@ -249,7 +284,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => setIsSignup(true)}
+              onClick={() => switchMode(true)}
               className="flex-1 rounded-lg text-sm font-bold cursor-pointer"
               style={{
                 height: 36,
@@ -277,6 +312,9 @@ export default function LoginPage() {
                   Full name
                 </label>
                 <input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
                   placeholder="Ada Lovelace"
                   className="w-full rounded-lg text-sm outline-none focus:border-[var(--primary)]"
                   style={{
@@ -297,6 +335,10 @@ export default function LoginPage() {
                 Email
               </label>
               <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 placeholder="you@company.com"
                 className="w-full rounded-lg text-sm outline-none focus:border-[var(--primary)]"
                 style={{
@@ -317,6 +359,10 @@ export default function LoginPage() {
               </label>
               <input
                 type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
                 placeholder="••••••••"
                 className="w-full rounded-lg text-sm outline-none focus:border-[var(--primary)]"
                 style={{
@@ -328,9 +374,40 @@ export default function LoginPage() {
                 }}
               />
             </div>
+
+            {error && (
+              <div
+                className="text-sm"
+                style={{
+                  marginBottom: 16,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "var(--danger-soft)",
+                  color: "var(--danger-2)",
+                }}
+              >
+                {error}
+              </div>
+            )}
+            {info && (
+              <div
+                className="text-sm"
+                style={{
+                  marginBottom: 16,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "var(--primary-soft)",
+                  color: "var(--primary)",
+                }}
+              >
+                {info}
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-lg text-white font-bold cursor-pointer hover:bg-[var(--primary-2)]"
+              disabled={submitting}
+              className="w-full rounded-lg text-white font-bold cursor-pointer hover:bg-[var(--primary-2)] disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 height: 47,
                 border: "none",
@@ -339,7 +416,7 @@ export default function LoginPage() {
                 boxShadow: "0 2px 8px rgba(12,85,163,0.28)",
               }}
             >
-              {authCta}
+              {submitting ? "Please wait…" : authCta}
             </button>
           </form>
 
@@ -356,7 +433,7 @@ export default function LoginPage() {
 
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={handleGoogle}
             className="flex w-full items-center justify-center rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
             style={{
               height: 47,
