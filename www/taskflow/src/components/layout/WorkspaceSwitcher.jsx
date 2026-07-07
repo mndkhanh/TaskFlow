@@ -1,11 +1,33 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { useBoardData } from "../../context/BoardDataContext";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
 import Icon from "../ui/Icon";
 
+// A single row in the workspace menu.
+function MenuRow({ icon, label, onClick, onMouseEnter, trailing, danger }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      className="flex w-full items-center gap-2.5 rounded-md text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
+      style={{ padding: 8, border: "none", background: "none", color: danger ? "var(--danger)" : "var(--text)" }}
+    >
+      <Icon name={icon} size={18} style={{ color: danger ? "var(--danger)" : "var(--text-3)", flex: "none" }} />
+      <span className="flex-1 text-left">{label}</span>
+      {trailing}
+    </button>
+  );
+}
+
 export default function WorkspaceSwitcher() {
   const { workspaces, activeWorkspaceId, selectWorkspace } = useBoardData();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [showSwitch, setShowSwitch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const rootRef = useRef(null);
 
@@ -28,14 +50,30 @@ export default function WorkspaceSwitcher() {
     };
   }, [open]);
 
+  // Reset the submenu whenever the whole menu closes.
+  useEffect(() => {
+    if (!open) setShowSwitch(false);
+  }, [open]);
+
+  const closeMenu = () => {
+    setOpen(false);
+    setShowSwitch(false);
+  };
+
   const handleSelect = (id) => {
     selectWorkspace(id);
-    setOpen(false);
+    closeMenu();
   };
 
   const openCreate = () => {
-    setOpen(false);
+    closeMenu();
     setShowCreate(true);
+  };
+
+  const handleLogout = () => {
+    closeMenu();
+    logout();
+    navigate("/login");
   };
 
   return (
@@ -70,16 +108,12 @@ export default function WorkspaceSwitcher() {
             No workspace
           </span>
         )}
-        <Icon
-          name="unfold_more"
-          size={18}
-          style={{ color: "var(--text-3)", flex: "none" }}
-        />
+        <Icon name="unfold_more" size={18} style={{ color: "var(--text-3)", flex: "none" }} />
       </button>
 
       {open && (
         <div
-          className="absolute left-0 right-0 z-40 rounded-lg overflow-hidden"
+          className="absolute left-0 right-0 z-40 rounded-lg"
           style={{
             top: "calc(100% + 6px)",
             background: "var(--surface)",
@@ -89,55 +123,98 @@ export default function WorkspaceSwitcher() {
             animation: "tf-pop .14s ease",
           }}
         >
-          <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
-            {workspaces.map((ws) => {
-              const isActive = ws.id === activeWs?.id;
-              return (
+          <MenuRow icon="settings" label="Settings" onClick={closeMenu} onMouseEnter={() => setShowSwitch(false)} />
+          <MenuRow
+            icon="group"
+            label="Invite and manage members"
+            onClick={closeMenu}
+            onMouseEnter={() => setShowSwitch(false)}
+          />
+
+          <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
+
+          {/* Switch workspace — reveals the workspace list as a flyout to the right on hover. */}
+          <div
+            className="relative"
+            onMouseEnter={() => setShowSwitch(true)}
+            onMouseLeave={() => setShowSwitch(false)}
+          >
+            <MenuRow
+              icon="swap_horiz"
+              label="Switch workspace"
+              onClick={() => setShowSwitch((v) => !v)}
+              trailing={<Icon name="chevron_right" size={18} style={{ color: "var(--text-3)", flex: "none" }} />}
+            />
+
+            {showSwitch && (
+              <div
+                className="absolute z-50 rounded-lg"
+                style={{
+                  left: "calc(100% + 6px)",
+                  top: -6,
+                  width: 232,
+                  background: "var(--surface)",
+                  border: "1px solid var(--border-2)",
+                  boxShadow: "var(--shadow-lg)",
+                  padding: 6,
+                  animation: "tf-pop .14s ease",
+                }}
+              >
+                <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
+                  {workspaces.length === 0 && (
+                    <div className="text-sm" style={{ padding: 8, color: "var(--text-3)" }}>No workspaces</div>
+                  )}
+                  {workspaces.map((ws) => {
+                    const isActive = ws.id === activeWs?.id;
+                    return (
+                      <button
+                        key={ws.id}
+                        type="button"
+                        onClick={() => handleSelect(ws.id)}
+                        className="flex w-full items-center gap-2.5 rounded-md cursor-pointer hover:bg-[var(--surface-2)]"
+                        style={{ padding: 8, border: "none", background: isActive ? "var(--primary-soft)" : "none" }}
+                      >
+                        <span
+                          className="flex flex-none items-center justify-center rounded-md text-xs font-bold text-white"
+                          style={{ width: 26, height: 26, background: ws.color }}
+                        >
+                          {ws.initial}
+                        </span>
+                        <span
+                          className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm font-semibold"
+                          style={isActive ? { color: "var(--primary)" } : { color: "var(--text)" }}
+                        >
+                          {ws.name}
+                        </span>
+                        {isActive && <Icon name="check" size={18} style={{ color: "var(--primary)", flex: "none" }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
+
                 <button
-                  key={ws.id}
                   type="button"
-                  onClick={() => handleSelect(ws.id)}
-                  className="flex w-full items-center gap-2.5 rounded-md cursor-pointer hover:bg-[var(--surface-2)]"
-                  style={{
-                    padding: 8,
-                    border: "none",
-                    background: isActive ? "var(--primary-soft)" : "none",
-                  }}
+                  onClick={openCreate}
+                  className="flex w-full items-center gap-2.5 rounded-md text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
+                  style={{ padding: 8, border: "none", background: "none", color: "var(--primary)" }}
                 >
                   <span
-                    className="flex flex-none items-center justify-center rounded-md text-xs font-bold text-white"
-                    style={{ width: 26, height: 26, background: ws.color }}
+                    className="flex flex-none items-center justify-center rounded-md"
+                    style={{ width: 26, height: 26, background: "var(--primary-soft)" }}
                   >
-                    {ws.initial}
+                    <Icon name="add" size={18} style={{ color: "var(--primary)" }} />
                   </span>
-                  <span
-                    className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm font-semibold"
-                    style={isActive ? { color: "var(--primary)" } : { color: "var(--text)" }}
-                  >
-                    {ws.name}
-                  </span>
-                  {isActive && <Icon name="check" size={18} style={{ color: "var(--primary)", flex: "none" }} />}
+                  Create workspace
                 </button>
-              );
-            })}
+              </div>
+            )}
           </div>
 
           <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
 
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex w-full items-center gap-2.5 rounded-md text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
-            style={{ padding: 8, border: "none", background: "none", color: "var(--primary)" }}
-          >
-            <span
-              className="flex flex-none items-center justify-center rounded-md"
-              style={{ width: 26, height: 26, background: "var(--primary-soft)" }}
-            >
-              <Icon name="add" size={18} style={{ color: "var(--primary)" }} />
-            </span>
-            Create workspace
-          </button>
+          <MenuRow icon="logout" label="Log out" onClick={handleLogout} onMouseEnter={() => setShowSwitch(false)} danger />
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useBoardData } from "../context/BoardDataContext";
+import Sidebar from "../components/layout/Sidebar";
 import BoardHeader from "../components/layout/BoardHeader";
 import BoardColumn from "../components/board/BoardColumn";
 import BoardListView from "../components/board/BoardListView";
@@ -105,76 +106,82 @@ export default function BoardPage() {
 
   if (!board) {
     return (
-      <div
-        className="flex h-screen flex-col items-center justify-center gap-3 text-sm"
-        style={{ background: "var(--bg)", color: "var(--text-2)" }}
-      >
-        {boardsLoading ? (
-          "Loading board…"
-        ) : (
-          <>
-            <div>This board doesn’t exist or isn’t in your active workspace.</div>
-            <button
-              type="button"
-              onClick={() => navigate("/dashboard")}
-              className="rounded-lg text-sm font-bold text-white cursor-pointer hover:bg-[var(--primary-2)]"
-              style={{ height: 40, padding: "0 16px", border: "none", background: "var(--primary)" }}
-            >
-              Back to boards
-            </button>
-          </>
-        )}
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <div
+          className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 text-sm"
+          style={{ background: "var(--bg)", color: "var(--text-2)" }}
+        >
+          {boardsLoading ? (
+            "Loading board…"
+          ) : (
+            <>
+              <div>This board doesn’t exist or isn’t in your active workspace.</div>
+              <button
+                type="button"
+                onClick={() => navigate("/dashboard")}
+                className="rounded-lg text-sm font-bold text-white cursor-pointer hover:bg-[var(--primary-2)]"
+                style={{ height: 40, padding: "0 16px", border: "none", background: "var(--primary)" }}
+              >
+                Back to boards
+              </button>
+            </>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <BoardHeader board={board} workspaceName={workspaceName} view={view} onViewChange={changeView} />
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <BoardHeader board={board} workspaceName={workspaceName} view={view} onViewChange={changeView} />
 
-      {view === "kanban" ? (
-        <div className="flex flex-1 items-start gap-3.5 overflow-x-auto overflow-y-hidden" style={{ padding: 20 }}>
-          {lists.map((list) => (
-            <BoardColumn
-              key={list.id}
-              list={list}
-              dragTarget={dragTarget}
-              dragCardId={dragCardId}
-              isComposerOpen={composerListId === list.id}
-              composerText={composerText}
-              onComposerTextChange={setComposerText}
-              onOpenComposer={openComposer}
-              onSubmitComposer={handleSubmitComposer}
-              onCancelComposer={cancelComposer}
-              onCardDragStart={handleCardDragStart}
-              onCardDragOver={handleCardDragOver}
-              onCardDragEnd={handleCardDragEnd}
-              onListDragOver={handleListDragOver}
-              onListDrop={handleListDrop}
-              onCardClick={setOpenCardId}
-            />
-          ))}
-          <button
-            type="button"
-            className="flex flex-none items-center gap-2 rounded-2xl text-sm font-semibold cursor-pointer hover:bg-[var(--surface-3)]"
-            style={{ width: 290, padding: "13px 14px", border: "none", background: "var(--surface-2)", color: "var(--text-2)" }}
-          >
-            <Icon name="add" size={20} />
-            Add another list
-          </button>
-        </div>
-      ) : (
-        <BoardListView
-          lists={lists}
-          composerListId={composerListId}
-          composerText={composerText}
-          onComposerTextChange={setComposerText}
-          onOpenComposer={openComposer}
-          onSubmitComposer={handleSubmitComposer}
-          onCancelComposer={cancelComposer}
-          onCardClick={setOpenCardId}
-        />
-      )}
+        {view === "kanban" ? (
+          <div className="flex flex-1 items-start gap-3.5 overflow-x-auto overflow-y-hidden" style={{ padding: 20 }}>
+            {lists.map((list) => (
+              <BoardColumn
+                key={list.id}
+                list={list}
+                dragTarget={dragTarget}
+                dragCardId={dragCardId}
+                isComposerOpen={composerListId === list.id}
+                composerText={composerText}
+                onComposerTextChange={setComposerText}
+                onOpenComposer={openComposer}
+                onSubmitComposer={handleSubmitComposer}
+                onCancelComposer={cancelComposer}
+                onCardDragStart={handleCardDragStart}
+                onCardDragOver={handleCardDragOver}
+                onCardDragEnd={handleCardDragEnd}
+                onListDragOver={handleListDragOver}
+                onListDrop={handleListDrop}
+                onCardClick={setOpenCardId}
+              />
+            ))}
+            <button
+              type="button"
+              className="flex flex-none items-center gap-2 rounded-2xl text-sm font-semibold cursor-pointer hover:bg-[var(--surface-3)]"
+              style={{ width: 290, padding: "13px 14px", border: "none", background: "var(--surface-2)", color: "var(--text-2)" }}
+            >
+              <Icon name="add" size={20} />
+              Add another list
+            </button>
+          </div>
+        ) : (
+          <BoardListView
+            lists={lists}
+            composerListId={composerListId}
+            composerText={composerText}
+            onComposerTextChange={setComposerText}
+            onOpenComposer={openComposer}
+            onSubmitComposer={handleSubmitComposer}
+            onCancelComposer={cancelComposer}
+            onCardClick={setOpenCardId}
+          />
+        )}
+      </div>
 
       {openCard && (
         <CardModal
