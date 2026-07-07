@@ -1,28 +1,15 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 import { useBoardData } from "../../context/BoardDataContext";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import CreateBoardModal from "../board/CreateBoardModal";
 import Icon from "../ui/Icon";
 
-const NAV_ITEMS = [
-  { icon: "home", label: "Home", to: "/dashboard" },
-  { icon: "group", label: "Members" },
-  { icon: "settings", label: "Settings" },
-];
-
 export default function Sidebar() {
-  const { logout } = useAuth();
   const { boards, boardsLoading } = useBoardData();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [showCreateBoard, setShowCreateBoard] = useState(false);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
 
   return (
     <aside
