@@ -36,9 +36,11 @@ export default function BoardCard({ card, listId, isDragging, dropBefore, onDrag
       >
         {hasLabels && (
           <div className="flex flex-wrap gap-1.5" style={{ marginBottom: 9 }}>
-            {card.labels.map((labelId) => (
-              <span key={labelId} className="rounded" style={{ height: 8, width: 34, background: labels[labelId].color }} />
-            ))}
+            {card.labels.map((labelId) =>
+              labels[labelId] ? (
+                <span key={labelId} className="rounded" style={{ height: 8, width: 34, background: labels[labelId].color }} />
+              ) : null
+            )}
           </div>
         )}
         <div className="text-sm font-semibold" style={{ lineHeight: 1.35, color: "var(--text)" }}>{card.title}</div>
@@ -80,9 +82,11 @@ export default function BoardCard({ card, listId, isDragging, dropBefore, onDrag
             <span className="flex-1" />
             {hasAssignees && (
               <span className="flex">
-                {card.assignees.map((id) => (
-                  <Avatar key={id} initials={members[id].initials} color={members[id].color} size={24} overlap />
-                ))}
+                {card.assignees.map((id) =>
+                  members[id] ? (
+                    <Avatar key={id} initials={members[id].initials} color={members[id].color} size={24} overlap />
+                  ) : null
+                )}
               </span>
             )}
           </div>

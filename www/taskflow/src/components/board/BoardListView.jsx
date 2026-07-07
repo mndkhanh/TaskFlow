@@ -29,9 +29,11 @@ function CardRow({ card, listId, isDragging, dropBefore, onDragStart, onDragOver
       >
         {card.labels.length > 0 && (
           <span className="flex flex-none gap-1">
-            {card.labels.map((labelId) => (
-              <span key={labelId} className="rounded" style={{ height: 8, width: 22, background: labels[labelId].color }} />
-            ))}
+            {card.labels.map((labelId) =>
+              labels[labelId] ? (
+                <span key={labelId} className="rounded" style={{ height: 8, width: 22, background: labels[labelId].color }} />
+              ) : null
+            )}
           </span>
         )}
 
@@ -80,9 +82,11 @@ function CardRow({ card, listId, isDragging, dropBefore, onDragStart, onDragOver
 
         {card.assignees.length > 0 && (
           <span className="flex flex-none">
-            {card.assignees.map((id) => (
-              <Avatar key={id} initials={members[id].initials} color={members[id].color} size={24} overlap />
-            ))}
+            {card.assignees.map((id) =>
+              members[id] ? (
+                <Avatar key={id} initials={members[id].initials} color={members[id].color} size={24} overlap />
+              ) : null
+            )}
           </span>
         )}
       </div>
