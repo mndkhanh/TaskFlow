@@ -557,21 +557,68 @@ export function BoardDataProvider({ children }) {
     [activeBoardId]
   );
 
-  // Insert a card at the end of a list, then append the real row to local state.
-  const addCard = useCallback(
+  // Rename a list (optimistic), then persist.
+  const renameList = useCallback(
     async (listId, title) => {
+      const t = title.trim();
+      if (!t) return {};
+      setLists((cur) => cur.map((l) => (l.id === listId ? { ...l, title: t } : l)));
+      const { error } = await supabase.from("lists").update({ title: t }).eq("id", listId);
+      if (error) await reconcile();
+      return { error };
+    },
+    [reconcile]
+  );
+
+  // Delete a list and its cards (DB cascades), removing it from state.
+  const deleteList = useCallback(
+    async (listId) => {
+      setLists((cur) => cur.filter((l) => l.id !== listId));
+      const { error } = await supabase.from("lists").delete().eq("id", listId);
+      if (error) await reconcile();
+      return { error };
+    },
+    [reconcile]
+  );
+
+  // Insert a card at the end of a list with optional attributes (description, due
+  // date, labels, assignees), persist any join rows, then append it to state.
+  const addCard = useCallback(
+    async (listId, title, opts = {}) => {
       const list = listsRef.current.find((l) => l.id === listId);
       const position = list ? list.cards.length : 0;
       const { data, error } = await supabase
         .from("cards")
-        .insert({ list_id: listId, title, position, created_by: userId })
+        .insert({
+          list_id: listId,
+          title,
+          description: opts.description?.trim() ? opts.description.trim() : null,
+          due_date: opts.dueDate ?? null,
+          position,
+          created_by: userId,
+        })
         .select(CARD_COLUMNS)
         .single();
       if (error) return { error };
-      setLists((cur) => cur.map((l) => (l.id === listId ? { ...l, cards: [...l.cards, mapCard(data)] } : l)));
+
+      const labels = opts.labels ?? [];
+      const assignees = opts.assignees ?? [];
+      const joins = [];
+      if (labels.length)
+        joins.push(supabase.from("card_labels").insert(labels.map((label_id) => ({ card_id: data.id, label_id }))));
+      if (assignees.length)
+        joins.push(supabase.from("card_assignees").insert(assignees.map((uid) => ({ card_id: data.id, user_id: uid }))));
+
+      const card = { ...mapCard(data), labels, assignees };
+      setLists((cur) => cur.map((l) => (l.id === listId ? { ...l, cards: [...l.cards, card] } : l)));
+
+      if (joins.length) {
+        const results = await Promise.all(joins);
+        if (results.some((r) => r.error)) await reconcile();
+      }
       return { data };
     },
-    [userId]
+    [userId, reconcile]
   );
 
   // Update a card's editable core fields (title / description / due date).
@@ -845,6 +892,8 @@ export function BoardDataProvider({ children }) {
     listsError,
     moveCard,
     addList,
+    renameList,
+    deleteList,
     addCard,
     updateCard,
     deleteCard,
