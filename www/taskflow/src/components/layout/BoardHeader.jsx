@@ -95,44 +95,7 @@ function CrumbDropdown({ label, strong, items, activeId, emptyLabel, onSelect })
   );
 }
 
-function ViewToggle({ view, onViewChange }) {
-  const options = [
-    { key: "kanban", icon: "view_kanban", label: "Board" },
-    { key: "list", icon: "view_list", label: "List" },
-  ];
-  return (
-    <div
-      className="flex items-center"
-      style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 2, gap: 2 }}
-    >
-      {options.map((opt) => {
-        const active = view === opt.key;
-        return (
-          <button
-            key={opt.key}
-            type="button"
-            onClick={() => onViewChange(opt.key)}
-            aria-pressed={active}
-            className="flex items-center gap-1.5 rounded-md text-sm font-semibold cursor-pointer"
-            style={{
-              height: 30,
-              padding: "0 10px",
-              border: "none",
-              background: active ? "var(--surface)" : "transparent",
-              color: active ? "var(--text)" : "var(--text-3)",
-              boxShadow: active ? "var(--shadow)" : "none",
-            }}
-          >
-            <Icon name={opt.icon} size={17} />
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-export default function BoardHeader({ board, workspaceName, view, onViewChange }) {
+export default function BoardHeader({ board, workspaceName, panelOpen, onTogglePanel, filterCount }) {
   const { members, boards } = useBoardData();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -168,14 +131,30 @@ export default function BoardHeader({ board, workspaceName, view, onViewChange }
           onSelect={handleBoardSelect}
         />
       </div>
-      {view && onViewChange && <ViewToggle view={view} onViewChange={onViewChange} />}
       <button
         type="button"
+        onClick={onTogglePanel}
+        aria-pressed={panelOpen}
+        title="Board panel (info, members, labels, filter)"
         className="flex items-center gap-1.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
-        style={{ height: 36, padding: "0 12px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-2)" }}
+        style={{
+          height: 36,
+          padding: "0 12px",
+          border: "1px solid var(--border)",
+          background: panelOpen ? "var(--surface-2)" : "var(--surface)",
+          color: "var(--text-2)",
+        }}
       >
-        <Icon name="filter_list" size={18} />
-        Filter
+        <Icon name="tune" size={18} />
+        Panel
+        {filterCount > 0 && (
+          <span
+            className="flex items-center justify-center rounded-full text-white"
+            style={{ minWidth: 18, height: 18, padding: "0 5px", fontSize: 11, fontWeight: 700, background: "var(--primary)" }}
+          >
+            {filterCount}
+          </span>
+        )}
       </button>
       <div className="flex items-center">
         {Object.values(members).slice(0, 5).map((m) => (

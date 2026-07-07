@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useBoardData } from "../context/BoardDataContext";
 import Sidebar from "../components/layout/Sidebar";
 import BoardHeader from "../components/layout/BoardHeader";
 import BoardColumn from "../components/board/BoardColumn";
 import BoardListView from "../components/board/BoardListView";
+import BoardRightSidebar, { EMPTY_FILTER, filterActiveCount } from "../components/board/BoardRightSidebar";
 import CardModal from "../components/board/CardModal";
 import CreateCardModal from "../components/board/CreateCardModal";
 import Icon from "../components/ui/Icon";
@@ -13,6 +14,22 @@ import Icon from "../components/ui/Icon";
 function readStoredView() {
   const v = typeof localStorage !== "undefined" ? localStorage.getItem("tf.boardView") : null;
   return v === "list" ? "list" : "kanban";
+}
+
+function readPanelOpen() {
+  try {
+    return localStorage.getItem("tf.boardPanelOpen") !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function readPanelTab() {
+  try {
+    return localStorage.getItem("tf.boardPanelTab") || "info";
+  } catch {
+    return "info";
+  }
 }
 
 export default function BoardPage() {
@@ -51,6 +68,44 @@ export default function BoardPage() {
   const [openCardId, setOpenCardId] = useState(null);
   const [addingList, setAddingList] = useState(false);
   const [listDraft, setListDraft] = useState("");
+  const [panelOpen, setPanelOpen] = useState(readPanelOpen);
+  const [panelTab, setPanelTab] = useState(readPanelTab);
+  const [filter, setFilter] = useState(EMPTY_FILTER);
+
+  const setPanel = (open) => {
+    setPanelOpen(open);
+    try {
+      localStorage.setItem("tf.boardPanelOpen", open ? "1" : "0");
+    } catch {
+      // localStorage may be unavailable (private mode); panel still works in-memory
+    }
+  };
+
+  const changeTab = (tab) => {
+    setPanel(true);
+    setPanelTab(tab);
+    try {
+      localStorage.setItem("tf.boardPanelTab", tab);
+    } catch {
+      // ignore persistence failures
+    }
+  };
+
+  // Apply the active filter to each list's cards (kanban + list views render this).
+  const filteredLists = useMemo(() => {
+    const kw = filter.keyword.trim().toLowerCase();
+    if (filterActiveCount(filter) === 0) return lists;
+    const match = (c) => {
+      if (kw && !`${c.title} ${c.description || ""}`.toLowerCase().includes(kw)) return false;
+      if (filter.members.length && !c.assignees.some((id) => filter.members.includes(id))) return false;
+      if (filter.labels.length && !c.labels.some((id) => filter.labels.includes(id))) return false;
+      if (filter.due === "has" && !c.due) return false;
+      if (filter.due === "none" && c.due) return false;
+      if (filter.due === "soon" && !c.due?.soon) return false;
+      return true;
+    };
+    return lists.map((l) => ({ ...l, cards: l.cards.filter(match) }));
+  }, [lists, filter]);
 
   const submitList = () => {
     const title = listDraft.trim();
@@ -222,8 +277,16 @@ export default function BoardPage() {
             : undefined
         }
       >
-        <BoardHeader board={board} workspaceName={workspaceName} view={view} onViewChange={changeView} />
+        <BoardHeader
+          board={board}
+          workspaceName={workspaceName}
+          panelOpen={panelOpen}
+          onTogglePanel={() => setPanel(!panelOpen)}
+          filterCount={filterActiveCount(filter)}
+        />
 
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {listsLoading ? (
           <div className="flex flex-1 items-center justify-center text-sm" style={{ color: "var(--text-3)" }}>
             Loading lists…
@@ -234,7 +297,7 @@ export default function BoardPage() {
           </div>
         ) : view === "kanban" ? (
           <div className="flex flex-1 items-start gap-3.5 overflow-x-auto overflow-y-hidden" style={{ padding: 20 }}>
-            {lists.map((list) => (
+            {filteredLists.map((list) => (
               <BoardColumn
                 key={list.id}
                 list={list}
@@ -318,7 +381,7 @@ export default function BoardPage() {
           </div>
         ) : (
           <BoardListView
-            lists={lists}
+            lists={filteredLists}
             dragTarget={dragTarget}
             dragCardId={dragCardId}
             onOpenComposer={setCreateCardListId}
@@ -332,6 +395,22 @@ export default function BoardPage() {
             onCardClick={setOpenCardId}
           />
         )}
+          </div>
+          {panelOpen && (
+            <BoardRightSidebar
+              board={board}
+              lists={lists}
+              view={view}
+              onViewChange={changeView}
+              filter={filter}
+              onFilterChange={setFilter}
+              tab={panelTab}
+              onTabChange={changeTab}
+              onClose={() => setPanel(false)}
+              onBoardDeleted={() => navigate("/dashboard")}
+            />
+          )}
+        </div>
       </div>
 
       {openCard && (

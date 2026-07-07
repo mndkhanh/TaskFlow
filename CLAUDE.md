@@ -148,14 +148,28 @@ Component layout: `pages/` (LoginPage, DashboardPage, BoardPage) compose `compon
 (Sidebar, DashboardHeader, BoardHeader, ProtectedRoute, plus `WorkspaceSwitcher` — the workspace dropdown —
 and `CreateWorkspaceModal`) and `components/board/` (BoardColumn, BoardCard, BoardTile, `CreateCardModal`
 — a full up-front card form (title, description, due date, labels, members), replacing the old inline
-title-only composer — CardModal, plus `BoardListView` and `CreateBoardModal`), with low-level pieces in `components/ui/` (Icon,
+title-only composer — CardModal, `BoardRightSidebar`, plus `BoardListView` and `CreateBoardModal`), with
+low-level pieces in `components/ui/` (Icon,
 IconButton, Avatar). `BoardHeader`'s left side is a URL-style breadcrumb: the workspace name links back to
 `/dashboard`, and the board name is a `CrumbDropdown` for switching boards. `BoardPage.jsx` renders the
 board in one of two views — **kanban** (horizontal `BoardColumn`s) or **list** (`BoardListView`, vertical
 stacked sections of compact card rows). **Both views** use the same native HTML5 drag-and-drop (no
 `dnd-kit`/`@hello-pangea/dnd` despite `prd.md` proposing them) — the drag handlers live in `BoardPage` and
-call `moveCard`; there's a single drag state shared across views. The active view is a segmented toggle in
-`BoardHeader`, persisted to `localStorage` under `tf.boardView`.
+call `moveCard` (card reorder/move) and `moveList` (horizontal column reorder in kanban; the column header
+is the drag handle). The active view is now selected inside the **board panel** (below), persisted to
+`localStorage` under `tf.boardView`.
+
+**Board panel (`BoardRightSidebar`):** a persistent right-hand sidebar on `BoardPage`, toggled by the
+"Panel" button in `BoardHeader` (which replaced the old standalone view toggle + dead Filter button; its
+open state persists under `tf.boardPanelOpen`, active tab under `tf.boardPanelTab`). Four tabs: **Info**
+(rename board via `renameBoard`, banner set-by-URL/upload/remove, created date + list/card counts, delete
+board via `deleteBoard`), **Members** (workspace members pool), **Labels** (board labels with colors —
+create/rename/recolor via `createLabel`/`updateLabel`, delete via `deleteLabel`), and **Filter** (Board/List
+view switch + client-side card filtering by keyword/members/labels/due). Filter state lives in `BoardPage`
+(`EMPTY_FILTER`/`filterActiveCount` are exported from `BoardRightSidebar`) and is applied via a
+`filteredLists` memo before rendering either view; the header Panel button shows a badge with the active
+filter count. Note there is **no** separate header settings popover — View/Filter/Banner/board-settings all
+live in these tabs by design.
 
 **Remaining data-wiring work:** auth, workspaces, boards, lists/cards, and all card detail
 (checklists, comments, assignees, labels, attachments) are wired. The main gap left is **Realtime
@@ -166,4 +180,17 @@ bucket and store the public URL in `boards.background_url`; `mapBoards` exposes 
 synthesized by list position). `cardCount`/`avatars` on tiles remain empty rather than derived from
 real data. The collapsible sidebar state lives in `SidebarContext` (persisted to `localStorage` under
 `tf.sidebarCollapsed`); the toggle button (`components/layout/SidebarToggle`) sits at the far left of
-each page header. `/inbox` is a routed placeholder page (`pages/InboxPage`).
+each page header.
+
+**Activity feed / Inbox:** an `activities` table (workspace-scoped, append-only) plus an `activity_reads`
+table (per-`(activity,user)` read marker; absence = unread) back a real Inbox — both live at the tail of
+`harden_functions.sql` (their RLS uses the `private.*` helpers). `BoardDataContext` logs events
+best-effort via a stable `logActivity` callback (reading a `activityMetaRef` of the current
+workspace/board/user) from the mutation handlers: `board_created`, `card_created`, `card_moved` (only on a
+list change), `card_archived`, `comment_added`. It also fetches the workspace feed (embedding the
+RLS-filtered `activity_reads` so a non-empty array means "read"), exposes `activities`/`unreadCount`
+(unread excludes your own actions) and `markActivityRead`/`markActivityUnread`/`markAllActivitiesRead`/
+`refreshActivities`. `pages/InboxPage` renders the cross-board feed with read/unread controls (row click
+marks read + navigates to the board), and `Sidebar` shows an unread badge on the Inbox item. Not yet wired:
+Realtime, so another client's new activity only appears on refetch (workspace switch / opening the Inbox).
+Theme choice persists to `localStorage` under `tf.theme` (falling back to the OS `prefers-color-scheme`).

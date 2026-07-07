@@ -529,3 +529,73 @@ create policy "Members can delete board banners"
     bucket_id = 'board-banners'
     and private.current_workspace_role(((storage.foldername(name))[1])::uuid) in ('owner', 'member')
   );
+
+-- ============================================================================
+-- Activity feed + per-user read state (powers the Inbox).
+--
+-- `activities` is an append-only log of workspace events (board created, card
+-- created/moved/archived, comment added, …). It is workspace-scoped so the Inbox
+-- can list tracks from every board in the workspace in one query.
+--
+-- `activity_reads` records, per (activity, user), that a user has read an item —
+-- absence of a row means unread. This gives per-item read/unread plus a cheap
+-- unread count, and lets each user's read state be independent.
+--
+-- RLS uses the private.* helpers created above, so this must stay after them.
+-- ============================================================================
+
+create table public.activities (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  board_id uuid references public.boards (id) on delete set null,
+  card_id uuid references public.cards (id) on delete set null,
+  actor_id uuid references auth.users (id) on delete set null,
+  type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index activities_workspace_created_idx on public.activities (workspace_id, created_at desc);
+
+create table public.activity_reads (
+  activity_id uuid not null references public.activities (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  read_at timestamptz not null default now(),
+  primary key (activity_id, user_id)
+);
+
+create index activity_reads_user_idx on public.activity_reads (user_id);
+
+alter table public.activities enable row level security;
+alter table public.activity_reads enable row level security;
+
+-- activities: any workspace member can read the feed; owners/members can log an
+-- event, but only ever attributed to themselves.
+create policy "Members can view activities"
+  on public.activities for select
+  to authenticated
+  using (private.is_workspace_member(workspace_id));
+
+create policy "Members can log activities"
+  on public.activities for insert
+  to authenticated
+  with check (
+    private.current_workspace_role(workspace_id) in ('owner', 'member')
+    and actor_id = auth.uid()
+  );
+
+-- activity_reads: a user manages only their own read markers (read + unread).
+create policy "Users can view their read markers"
+  on public.activity_reads for select
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "Users can mark activities read"
+  on public.activity_reads for insert
+  to authenticated
+  with check (user_id = auth.uid());
+
+create policy "Users can mark activities unread"
+  on public.activity_reads for delete
+  to authenticated
+  using (user_id = auth.uid());

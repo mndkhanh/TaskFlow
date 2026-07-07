@@ -7,7 +7,7 @@ import CreateBoardModal from "../board/CreateBoardModal";
 import Icon from "../ui/Icon";
 
 export default function Sidebar() {
-  const { boards, boardsLoading } = useBoardData();
+  const { boards, boardsLoading, unreadCount } = useBoardData();
   const { collapsed } = useSidebar();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -44,6 +44,14 @@ export default function Sidebar() {
       >
         <Icon name="inbox" size={18} style={{ flex: "none" }} />
         <span className="min-w-0 flex-1 truncate text-left">Inbox</span>
+        {unreadCount > 0 && (
+          <span
+            className="flex flex-none items-center justify-center rounded-full text-white"
+            style={{ minWidth: 20, height: 20, padding: "0 6px", fontSize: 11, fontWeight: 700, background: "var(--primary)" }}
+          >
+            {unreadCount}
+          </span>
+        )}
       </button>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

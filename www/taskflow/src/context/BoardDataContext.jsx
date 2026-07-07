@@ -49,6 +49,7 @@ function mapBoards(rows) {
       image: b.background_url || null,
       color: theme.color,
       archived: b.is_archived,
+      created: b.created_at ?? null,
       cardCount: 0,
       avatars: [],
     };
@@ -234,6 +235,31 @@ export function BoardDataProvider({ children }) {
   const [workspacesError, setWorkspacesError] = useState(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
 
+  // Latest workspace/board/user ids for best-effort activity logging, so
+  // logActivity can stay a stable ([]) callback the mutation handlers can call.
+  const activityMetaRef = useRef({ workspaceId: null, boardId: null, userId: null });
+
+  // Append a workspace event to the activity feed (powers the Inbox). Fire-and-
+  // forget: a failed log must never break the mutation that triggered it.
+  const logActivity = useCallback((type, { boardId, cardId, payload } = {}) => {
+    const meta = activityMetaRef.current;
+    if (!meta.workspaceId || !meta.userId) return;
+    supabase
+      .from("activities")
+      .insert({
+        workspace_id: meta.workspaceId,
+        board_id: boardId ?? meta.boardId ?? null,
+        card_id: cardId ?? null,
+        actor_id: meta.userId,
+        type,
+        payload: payload ?? {},
+      })
+      .then(
+        () => {},
+        () => {}
+      );
+  }, []);
+
   // Fetch the signed-in user's workspaces. RLS scopes workspace_members to the
   // workspaces they belong to, so a single unfiltered query gives us every member
   // row across all their workspaces — enough for the list, their role, and counts.
@@ -411,10 +437,35 @@ export function BoardDataProvider({ children }) {
 
       const res = await fetchBoards(activeWorkspaceId);
       if (!res.error) setBoards(res.boards);
+      logActivity("board_created", { boardId: data.id, payload: { title } });
       return { data };
     },
-    [activeWorkspaceId, userId, fetchBoards]
+    [activeWorkspaceId, userId, fetchBoards, logActivity]
   );
+
+  // Rename a board (optimistic), then persist; refetch to reconcile on failure.
+  const renameBoard = useCallback(
+    async (boardId, title) => {
+      const t = title.trim();
+      if (!t) return { error: { message: "Board name is required." } };
+      setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, name: t } : b)));
+      const { error } = await supabase.from("boards").update({ title: t }).eq("id", boardId);
+      if (error && activeWorkspaceId) {
+        const res = await fetchBoards(activeWorkspaceId);
+        if (!res.error) setBoards(res.boards);
+      }
+      return { error };
+    },
+    [activeWorkspaceId, fetchBoards]
+  );
+
+  // Delete a board and its lists/cards (DB cascades), removing it from state.
+  const deleteBoard = useCallback(async (boardId) => {
+    const { error } = await supabase.from("boards").delete().eq("id", boardId);
+    if (error) return { error };
+    setBoards((prev) => prev.filter((b) => b.id !== boardId));
+    return { data: true };
+  }, []);
 
   // --- Lists + cards for the currently-open board -------------------------------
 
@@ -430,6 +481,9 @@ export function BoardDataProvider({ children }) {
   useEffect(() => {
     listsRef.current = lists;
   }, [lists]);
+  useEffect(() => {
+    activityMetaRef.current = { workspaceId: activeWorkspaceId, boardId: activeBoardId, userId };
+  }, [activeWorkspaceId, activeBoardId, userId]);
   const boardLabelsRef = useRef(boardLabels);
   useEffect(() => {
     boardLabelsRef.current = boardLabels;
@@ -533,12 +587,22 @@ export function BoardDataProvider({ children }) {
   // Move a card (optimistic), then persist the new order of the affected list(s).
   const moveCard = useCallback(
     (cardId, targetListId, beforeCardId) => {
-      const result = applyMove(listsRef.current, cardId, targetListId, beforeCardId);
+      const before = listsRef.current;
+      const result = applyMove(before, cardId, targetListId, beforeCardId);
       if (!result) return;
       setLists(result.next);
       persistPositions(result.next, new Set([result.sourceListId, targetListId]));
+      if (result.sourceListId !== targetListId) {
+        const card = before.flatMap((l) => l.cards).find((c) => c.id === cardId);
+        const fromList = before.find((l) => l.id === result.sourceListId);
+        const toList = before.find((l) => l.id === targetListId);
+        logActivity("card_moved", {
+          cardId,
+          payload: { cardTitle: card?.title, from: fromList?.title, to: toList?.title },
+        });
+      }
     },
-    [persistPositions]
+    [persistPositions, logActivity]
   );
 
   // Persist the current column order by writing each list's position index.
@@ -650,9 +714,10 @@ export function BoardDataProvider({ children }) {
         const results = await Promise.all(joins);
         if (results.some((r) => r.error)) await reconcile();
       }
+      logActivity("card_created", { cardId: data.id, payload: { title, listTitle: list?.title } });
       return { data };
     },
-    [userId, reconcile]
+    [userId, reconcile, logActivity]
   );
 
   // Update a card's editable core fields (title / description / due date).
@@ -693,12 +758,14 @@ export function BoardDataProvider({ children }) {
   // Archive = hide from the board view (persisted via cards.is_archived).
   const archiveCard = useCallback(
     async (cardId) => {
+      const card = findCard(cardId);
       removeCardLocally(cardId);
       const { error } = await supabase.from("cards").update({ is_archived: true }).eq("id", cardId);
       if (error) await reconcile();
+      else logActivity("card_archived", { cardId, payload: { cardTitle: card?.title } });
       return { error };
     },
-    [removeCardLocally, reconcile]
+    [removeCardLocally, reconcile, findCard, logActivity]
   );
 
   // --- Checklist ----------------------------------------------------------------
@@ -765,9 +832,10 @@ export function BoardDataProvider({ children }) {
         ...c,
         comments: [...c.comments, { id: data.id, userId: data.user_id, text: data.content, createdAt: data.created_at }],
       }));
+      logActivity("comment_added", { cardId, payload: { cardTitle: findCard(cardId)?.title, snippet: t.slice(0, 140) } });
       return { data };
     },
-    [userId, patchCard]
+    [userId, patchCard, findCard, logActivity]
   );
 
   const deleteComment = useCallback(
@@ -839,6 +907,18 @@ export function BoardDataProvider({ children }) {
     const { error } = await supabase.from("labels").update(patch).eq("id", labelId);
     return { error };
   }, []);
+
+  // Delete a board label (DB cascades the card_labels join rows). Optimistically
+  // drop it from the board labels and from any card that carried it.
+  const deleteLabel = useCallback(async (labelId) => {
+    setBoardLabels((cur) => cur.filter((l) => l.id !== labelId));
+    setLists((cur) =>
+      cur.map((l) => ({ ...l, cards: l.cards.map((c) => ({ ...c, labels: c.labels.filter((id) => id !== labelId) })) }))
+    );
+    const { error } = await supabase.from("labels").delete().eq("id", labelId);
+    if (error) await reconcile();
+    return { error };
+  }, [reconcile]);
 
   // --- Attachments --------------------------------------------------------------
 
@@ -955,6 +1035,97 @@ export function BoardDataProvider({ children }) {
     return { data: true };
   }, []);
 
+  // --- Activity feed / Inbox ----------------------------------------------------
+
+  const [activities, setActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+
+  // Pull the workspace-wide activity feed (RLS scopes it to the user's workspaces).
+  // The embedded activity_reads is RLS-filtered to the current user, so a non-empty
+  // array means "this user has read it".
+  const fetchActivities = useCallback(async (workspaceId) => {
+    const { data, error } = await supabase
+      .from("activities")
+      .select("id, board_id, card_id, actor_id, type, payload, created_at, activity_reads(read_at)")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) return { error };
+    const rows = (data ?? []).map((a) => ({
+      id: a.id,
+      boardId: a.board_id,
+      cardId: a.card_id,
+      actorId: a.actor_id,
+      type: a.type,
+      payload: a.payload || {},
+      createdAt: a.created_at,
+      read: (a.activity_reads?.length ?? 0) > 0,
+    }));
+    return { activities: rows };
+  }, []);
+
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      setActivities([]);
+      return;
+    }
+    let cancelled = false;
+    setActivitiesLoading(true);
+    fetchActivities(activeWorkspaceId).then((res) => {
+      if (cancelled) return;
+      if (!res.error) setActivities(res.activities);
+      setActivitiesLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, fetchActivities]);
+
+  const refreshActivities = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    const res = await fetchActivities(activeWorkspaceId);
+    if (!res.error) setActivities(res.activities);
+  }, [activeWorkspaceId, fetchActivities]);
+
+  // Unread = not yet read and not your own action (you aren't notified of yourself).
+  const unreadCount = useMemo(
+    () => activities.filter((a) => !a.read && a.actorId !== userId).length,
+    [activities, userId]
+  );
+
+  const markActivityRead = useCallback(
+    async (activityId) => {
+      if (!userId) return;
+      setActivities((cur) => cur.map((a) => (a.id === activityId ? { ...a, read: true } : a)));
+      await supabase
+        .from("activity_reads")
+        .upsert({ activity_id: activityId, user_id: userId }, { onConflict: "activity_id,user_id", ignoreDuplicates: true });
+    },
+    [userId]
+  );
+
+  const markActivityUnread = useCallback(
+    async (activityId) => {
+      if (!userId) return;
+      setActivities((cur) => cur.map((a) => (a.id === activityId ? { ...a, read: false } : a)));
+      await supabase.from("activity_reads").delete().eq("activity_id", activityId).eq("user_id", userId);
+    },
+    [userId]
+  );
+
+  const markAllActivitiesRead = useCallback(async () => {
+    if (!userId) return;
+    const unread = activities.filter((a) => !a.read);
+    if (unread.length === 0) return;
+    setActivities((cur) => cur.map((a) => ({ ...a, read: true })));
+    await supabase
+      .from("activity_reads")
+      .upsert(unread.map((a) => ({ activity_id: a.id, user_id: userId })), {
+        onConflict: "activity_id,user_id",
+        ignoreDuplicates: true,
+      });
+  }, [activities, userId]);
+
   // Labels map (keyed by id) the cards/modal resolve label ids against.
   const labels = useMemo(() => {
     const m = {};
@@ -976,6 +1147,8 @@ export function BoardDataProvider({ children }) {
     boardsLoading,
     boardsError,
     createBoard,
+    renameBoard,
+    deleteBoard,
     updateBoardBanner,
     setBoardBannerUrl,
     removeBoardBanner,
@@ -1002,9 +1175,17 @@ export function BoardDataProvider({ children }) {
     toggleCardLabel,
     createLabel,
     updateLabel,
+    deleteLabel,
     uploadAttachment,
     getAttachmentUrl,
     deleteAttachment,
+    activities,
+    activitiesLoading,
+    unreadCount,
+    refreshActivities,
+    markActivityRead,
+    markActivityUnread,
+    markAllActivitiesRead,
   };
 
   return <BoardDataContext.Provider value={value}>{children}</BoardDataContext.Provider>;
