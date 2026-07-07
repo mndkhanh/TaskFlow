@@ -1,1 +1,136 @@
 @import "tailwindcss";
+
+:root,
+[data-theme="light"] {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #ebedf0;
+  --surface-3: #e1e4e8;
+  --border: #e4e7eb;
+  --border-2: #d3d8de;
+  --text: #141924;
+  --text-2: #586171;
+  --text-3: #8a94a2;
+  --primary: #0c55a3;
+  --primary-2: #0a4380;
+  --primary-soft: #e8f0f9;
+  --danger: #e61c23;
+  --danger-2: #c4141a;
+  --danger-soft: #fdeaeb;
+  --success: #0f9d58;
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 12px 40px rgba(16, 24, 40, 0.16);
+}
+
+[data-theme="dark"] {
+  --bg: #0e1116;
+  --surface: #161b22;
+  --surface-2: #1d2530;
+  --surface-3: #28303c;
+  --border: #2a313c;
+  --border-2: #3a4250;
+  --text: #e6e9ee;
+  --text-2: #9aa4b2;
+  --text-3: #6b7482;
+  --primary: #4f97e0;
+  --primary-2: #3d7fc4;
+  --primary-soft: #152a3f;
+  --danger: #f0565c;
+  --danger-2: #e61c23;
+  --danger-soft: #2a1418;
+  --success: #0f9d58;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(12, 85, 163, 0.2);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--primary-2);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+input,
+textarea,
+button {
+  font-family: inherit;
+}
+
+.material-symbols-rounded {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes tf-pop {
+  from {
+    transform: scale(0.97) translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes tf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
