@@ -81,9 +81,17 @@ export default function InboxPage() {
           style={{ height: 64, borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 20px" }}
         >
           <SidebarToggle />
-          <span className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)" }}>
-            {activeWs?.name || "Workspace"}
-          </span>
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            title="Back to your boards"
+            className="flex min-w-0 items-center rounded-md cursor-pointer hover:bg-[var(--surface-2)]"
+            style={{ height: 32, padding: "0 8px", border: "none", background: "none" }}
+          >
+            <span className="truncate" style={{ maxWidth: 220, fontSize: 14, fontWeight: 600, color: "var(--text-2)" }}>
+              {activeWs?.name || "Workspace"}
+            </span>
+          </button>
           <Icon name="chevron_right" size={18} style={{ color: "var(--text-3)", flex: "none" }} />
           <span className="text-sm font-extrabold" style={{ color: "var(--text)" }}>Inbox</span>
           {unreadCount > 0 && (
