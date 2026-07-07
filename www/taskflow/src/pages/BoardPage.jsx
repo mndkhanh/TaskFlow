@@ -6,6 +6,7 @@ import BoardHeader from "../components/layout/BoardHeader";
 import BoardColumn from "../components/board/BoardColumn";
 import BoardListView from "../components/board/BoardListView";
 import CardModal from "../components/board/CardModal";
+import CreateCardModal from "../components/board/CreateCardModal";
 import Icon from "../components/ui/Icon";
 
 // Remember the user's last-used board view across sessions.
@@ -28,7 +29,6 @@ export default function BoardPage() {
     listsError,
     moveCard,
     addList,
-    addCard,
   } = useBoardData();
 
   const board = boards.find((b) => b.id === boardId) ?? null;
@@ -42,8 +42,7 @@ export default function BoardPage() {
   const [view, setView] = useState(readStoredView);
   const [dragCardId, setDragCardId] = useState(null);
   const [dragTarget, setDragTarget] = useState(null);
-  const [composerListId, setComposerListId] = useState(null);
-  const [composerText, setComposerText] = useState("");
+  const [createCardListId, setCreateCardListId] = useState(null);
   const [openCardId, setOpenCardId] = useState(null);
   const [addingList, setAddingList] = useState(false);
   const [listDraft, setListDraft] = useState("");
@@ -106,13 +105,6 @@ export default function BoardPage() {
     setDragTarget(null);
   };
 
-  const handleSubmitComposer = () => {
-    const text = composerText.trim();
-    if (text && composerListId) addCard(composerListId, text);
-    setComposerListId(null);
-    setComposerText("");
-  };
-
   const openCard = (() => {
     for (const list of lists) {
       const card = list.cards.find((c) => c.id === openCardId);
@@ -121,14 +113,7 @@ export default function BoardPage() {
     return null;
   })();
 
-  const openComposer = (listId) => {
-    setComposerListId(listId);
-    setComposerText("");
-  };
-  const cancelComposer = () => {
-    setComposerListId(null);
-    setComposerText("");
-  };
+  const createCardListTitle = lists.find((l) => l.id === createCardListId)?.title ?? "";
 
   if (!board) {
     return (
@@ -180,12 +165,7 @@ export default function BoardPage() {
                 list={list}
                 dragTarget={dragTarget}
                 dragCardId={dragCardId}
-                isComposerOpen={composerListId === list.id}
-                composerText={composerText}
-                onComposerTextChange={setComposerText}
-                onOpenComposer={openComposer}
-                onSubmitComposer={handleSubmitComposer}
-                onCancelComposer={cancelComposer}
+                onOpenComposer={setCreateCardListId}
                 onCardDragStart={handleCardDragStart}
                 onCardDragOver={handleCardDragOver}
                 onCardDragEnd={handleCardDragEnd}
@@ -253,12 +233,7 @@ export default function BoardPage() {
             lists={lists}
             dragTarget={dragTarget}
             dragCardId={dragCardId}
-            composerListId={composerListId}
-            composerText={composerText}
-            onComposerTextChange={setComposerText}
-            onOpenComposer={openComposer}
-            onSubmitComposer={handleSubmitComposer}
-            onCancelComposer={cancelComposer}
+            onOpenComposer={setCreateCardListId}
             onCardDragStart={handleCardDragStart}
             onCardDragOver={handleCardDragOver}
             onCardDragEnd={handleCardDragEnd}
@@ -275,6 +250,15 @@ export default function BoardPage() {
           listTitle={openCard.listTitle}
           boardColor={board.color}
           onClose={() => setOpenCardId(null)}
+        />
+      )}
+
+      {createCardListId && (
+        <CreateCardModal
+          listId={createCardListId}
+          listTitle={createCardListTitle}
+          boardColor={board.color}
+          onClose={() => setCreateCardListId(null)}
         />
       )}
     </div>

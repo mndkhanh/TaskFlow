@@ -1,7 +1,6 @@
 import { useBoardData } from "../../context/BoardDataContext";
 import Avatar from "../ui/Avatar";
 import Icon from "../ui/Icon";
-import CardComposer from "./CardComposer";
 
 // A thin horizontal line marking where a dragged card will drop.
 function DropLine() {
@@ -98,12 +97,7 @@ export default function BoardListView({
   lists,
   dragTarget,
   dragCardId,
-  composerListId,
-  composerText,
-  onComposerTextChange,
   onOpenComposer,
-  onSubmitComposer,
-  onCancelComposer,
   onCardDragStart,
   onCardDragOver,
   onCardDragEnd,
@@ -153,26 +147,15 @@ export default function BoardListView({
                 {dropAtEnd && <DropLine />}
               </div>
 
-              {composerListId === list.id ? (
-                <div style={{ borderTop: "1px solid var(--border)" }}>
-                  <CardComposer
-                    text={composerText}
-                    onTextChange={onComposerTextChange}
-                    onSubmit={onSubmitComposer}
-                    onCancel={onCancelComposer}
-                  />
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onOpenComposer(list.id)}
-                  className="flex w-full items-center gap-1.5 text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-                  style={{ padding: "10px 14px", border: "none", borderTop: "1px solid var(--border)", background: "none", color: "var(--text-2)" }}
-                >
-                  <Icon name="add" size={19} />
-                  Add a card
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => onOpenComposer(list.id)}
+                className="flex w-full items-center gap-1.5 text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                style={{ padding: "10px 14px", border: "none", borderTop: "1px solid var(--border)", background: "none", color: "var(--text-2)" }}
+              >
+                <Icon name="add" size={19} />
+                Add a card
+              </button>
             </section>
           );
         })}
