@@ -14,7 +14,14 @@ export default function BoardTile({ board }) {
       className="cursor-pointer overflow-hidden rounded-2xl text-left transition-transform hover:-translate-y-0.5"
       style={{ border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow)", padding: 0 }}
     >
-      <div className="relative" style={{ height: 82, background: board.gradient }}>
+      <div
+        className="relative"
+        style={
+          board.image
+            ? { height: 82, backgroundImage: `url("${board.image}")`, backgroundSize: "cover", backgroundPosition: "center" }
+            : { height: 82, background: board.gradient }
+        }
+      >
         {board.archived && (
           <span
             className="absolute rounded-md text-xs font-bold text-white"

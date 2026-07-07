@@ -43,7 +43,10 @@ function mapBoards(rows) {
       id: b.id,
       workspaceId: b.workspace_id,
       name: b.title,
-      gradient: b.background_url || theme.gradient,
+      // gradient is the always-present fallback; image is the uploaded banner (a
+      // public URL) when the board has one, rendered as an actual background image.
+      gradient: theme.gradient,
+      image: b.background_url || null,
       color: theme.color,
       archived: b.is_archived,
       cardCount: 0,
@@ -864,6 +867,50 @@ export function BoardDataProvider({ children }) {
     [patchCard, reconcile]
   );
 
+  // --- Board banners ------------------------------------------------------------
+
+  // Upload a banner image for a board and point boards.background_url at its public
+  // URL. Path {workspace_id}/{board_id}/{uuid}.{ext} so the storage RLS policies can
+  // resolve the owning workspace from the first path segment. The board-banners bucket
+  // is public, so we store the plain public URL and render it directly.
+  const updateBoardBanner = useCallback(
+    async (boardId, file) => {
+      const board = boards.find((b) => b.id === boardId);
+      const workspaceId = board?.workspaceId ?? activeWorkspaceId;
+      if (!workspaceId) return { error: { message: "Not ready." } };
+
+      const ext = (file.name.split(".").pop() || "img").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const path = `${workspaceId}/${boardId}/${crypto.randomUUID()}.${ext}`;
+      const up = await supabase.storage
+        .from("board-banners")
+        .upload(path, file, { upsert: false, contentType: file.type || undefined });
+      if (up.error) return { error: up.error };
+
+      const { data: pub } = supabase.storage.from("board-banners").getPublicUrl(path);
+      const publicUrl = pub.publicUrl;
+
+      const { error } = await supabase
+        .from("boards")
+        .update({ background_url: publicUrl })
+        .eq("id", boardId);
+      if (error) {
+        await supabase.storage.from("board-banners").remove([path]); // best-effort cleanup
+        return { error };
+      }
+
+      setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, image: publicUrl } : b)));
+      return { data: { url: publicUrl } };
+    },
+    [boards, activeWorkspaceId]
+  );
+
+  const removeBoardBanner = useCallback(async (boardId) => {
+    const { error } = await supabase.from("boards").update({ background_url: null }).eq("id", boardId);
+    if (error) return { error };
+    setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, image: null } : b)));
+    return { data: true };
+  }, []);
+
   // Labels map (keyed by id) the cards/modal resolve label ids against.
   const labels = useMemo(() => {
     const m = {};
@@ -885,6 +932,8 @@ export function BoardDataProvider({ children }) {
     boardsLoading,
     boardsError,
     createBoard,
+    updateBoardBanner,
+    removeBoardBanner,
     activeBoardId,
     setActiveBoardId,
     lists,

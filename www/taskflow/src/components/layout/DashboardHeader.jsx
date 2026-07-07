@@ -3,6 +3,7 @@ import { useTheme } from "../../context/ThemeContext";
 import Avatar from "../ui/Avatar";
 import Icon from "../ui/Icon";
 import IconButton from "../ui/IconButton";
+import SidebarToggle from "./SidebarToggle";
 
 export default function DashboardHeader() {
   const { workspaces, activeWorkspaceId, members } = useBoardData();
@@ -15,7 +16,8 @@ export default function DashboardHeader() {
       className="flex flex-none items-center gap-4"
       style={{ height: 64, borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 28px" }}
     >
-      <div className="flex min-w-0 flex-1 items-center">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <SidebarToggle />
         {activeWs && (
           <span className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)" }}>
             {activeWs.name}
