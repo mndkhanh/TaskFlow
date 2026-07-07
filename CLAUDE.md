@@ -53,8 +53,8 @@ The Supabase project is named **TaskFlow** (ref `eyrxpgfwjoucgfjqinro`, region a
   (auto-provision profile + personal workspace on signup, `updated_at` maintenance), `rls_policies.sql`
   (Workspace-RBAC: owner/member write, viewer read-only), and `harden_functions.sql` (moves internal
   RLS-helper functions into a non-exposed `private` schema and pins `search_path` on every function — see
-  below; **also** carries the labels/card_labels/attachments RLS policies and the `card-attachments`
-  Storage bucket + its member-scoped storage policies), and `board_banners.sql` (a **public**
+  below; **also** carries the labels/card_labels/attachments RLS policies, the `card-attachments`
+  Storage bucket + its member-scoped storage policies, and — appended at the end — the **public**
   `board-banners` Storage bucket + member-gated write policies for board banner images).
 - `supabase/functions/` — placeholder for edge functions; empty so far.
 
@@ -63,14 +63,23 @@ workflow. These four files have already been applied to the remote project.
 
 **Known drift:** the taskflow frontend calls a `create_workspace` Postgres RPC (`supabase.rpc("create_workspace", …)`
 in `BoardDataContext.jsx`), and a code comment there points to `supabase/db/workspace_functions.sql` — but
-that file does not exist in `supabase/db/` yet. Either the RPC was applied to the remote without capturing
-its SQL here, or the call is ahead of the schema. Reconcile this (add `workspace_functions.sql` with the
-RPC's definition) before treating `supabase/db/` as a faithful mirror of the remote.
+that file does not exist in `supabase/db/` yet. The function **does exist on the remote** (`public.create_workspace`,
+confirmed 2026-07-08) but is absent from both the captured SQL and the migration history — it was applied
+out-of-band. Capture it (add `workspace_functions.sql` with the RPC's definition) before treating
+`supabase/db/` as a faithful mirror of the remote.
 
-**Not-yet-applied:** `supabase/db/board_banners.sql` was authored but **not applied to the remote** (the
-Supabase MCP was in read-only mode at the time). Until it's applied via `apply_migration`, the
-`board-banners` bucket doesn't exist and board banner upload will fail at runtime — apply it (then
-`get_advisors`) before relying on the banner feature.
+**Not-yet-applied (still failing):** the `board-banners` Storage bucket + policies (now the trailing
+section of `harden_functions.sql`, formerly the standalone `board_banners.sql`) were authored but **never
+applied to the remote** — confirmed 2026-07-08 that the bucket does not exist (only `card-attachments`
+does), and the migration history holds just the four migrations below. This is a **live runtime bug**: even
+though the banner feature is merged to `main`, deployed, and fully wired in the frontend
+(`updateBoardBanner`/`removeBoardBanner`), any banner *upload* fails because the target bucket is missing.
+(Setting a banner by external URL via `setBoardBannerUrl` writes straight to `boards.background_url` and
+works without the bucket.) Apply that bucket section via `apply_migration` (then run `get_advisors`) to fix
+uploads.
+
+The remote migration history currently records exactly four migrations, in order: `initial_schema`,
+`functions_triggers`, `rls_policies`, `harden_functions`.
 
 **Applying future schema changes:** edit/add SQL in `supabase/db/`, then apply that same SQL to the
 remote project via the Supabase MCP `apply_migration` tool (not `execute_sql` — that one's for querying,
@@ -137,8 +146,9 @@ matters: `BoardDataContext` calls `useAuth()` for the current user id), then `Br
 
 Component layout: `pages/` (LoginPage, DashboardPage, BoardPage) compose `components/layout/`
 (Sidebar, DashboardHeader, BoardHeader, ProtectedRoute, plus `WorkspaceSwitcher` — the workspace dropdown —
-and `CreateWorkspaceModal`) and `components/board/` (BoardColumn, BoardCard, BoardTile, CardComposer,
-CardModal, plus `BoardListView` and `CreateBoardModal`), with low-level pieces in `components/ui/` (Icon,
+and `CreateWorkspaceModal`) and `components/board/` (BoardColumn, BoardCard, BoardTile, `CreateCardModal`
+— a full up-front card form (title, description, due date, labels, members), replacing the old inline
+title-only composer — CardModal, plus `BoardListView` and `CreateBoardModal`), with low-level pieces in `components/ui/` (Icon,
 IconButton, Avatar). `BoardHeader`'s left side is a URL-style breadcrumb: the workspace name links back to
 `/dashboard`, and the board name is a `CrumbDropdown` for switching boards. `BoardPage.jsx` renders the
 board in one of two views — **kanban** (horizontal `BoardColumn`s) or **list** (`BoardListView`, vertical
