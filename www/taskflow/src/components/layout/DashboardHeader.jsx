@@ -4,12 +4,11 @@ import Avatar from "../ui/Avatar";
 import Icon from "../ui/Icon";
 import IconButton from "../ui/IconButton";
 
-const TEAM_IDS = ["ava", "marcus", "priya", "diego", "sam"];
-
 export default function DashboardHeader() {
   const { workspaces, activeWorkspaceId, members } = useBoardData();
   const { theme, toggleTheme } = useTheme();
   const activeWs = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
+  const memberList = Object.values(members);
 
   return (
     <header
@@ -37,8 +36,8 @@ export default function DashboardHeader() {
       </div>
 
       <div className="flex items-center">
-        {TEAM_IDS.map((id) => (
-          <Avatar key={id} initials={members[id].initials} color={members[id].color} overlap />
+        {memberList.slice(0, 5).map((m) => (
+          <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} overlap />
         ))}
       </div>
 

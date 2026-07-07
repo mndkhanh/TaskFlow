@@ -6,8 +6,6 @@ import Avatar from "../ui/Avatar";
 import Icon from "../ui/Icon";
 import IconButton from "../ui/IconButton";
 
-const TEAM_IDS = ["ava", "marcus", "priya", "diego", "sam"];
-
 // One segment of the breadcrumb: a URL-style label that opens a dropdown of siblings.
 function CrumbDropdown({ label, strong, items, activeId, emptyLabel, onSelect }) {
   const [open, setOpen] = useState(false);
@@ -178,8 +176,8 @@ export default function BoardHeader({ board, workspaceName, view, onViewChange }
         Filter
       </button>
       <div className="flex items-center">
-        {TEAM_IDS.map((id) => (
-          <Avatar key={id} initials={members[id].initials} color={members[id].color} overlap />
+        {Object.values(members).slice(0, 5).map((m) => (
+          <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} overlap />
         ))}
       </div>
       <button

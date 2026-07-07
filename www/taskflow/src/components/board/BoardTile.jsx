@@ -31,9 +31,11 @@ export default function BoardTile({ board }) {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex">
-            {board.avatars.map((id) => (
-              <Avatar key={id} initials={members[id].initials} color={members[id].color} size={26} overlap />
-            ))}
+            {board.avatars.map((id) =>
+              members[id] ? (
+                <Avatar key={id} initials={members[id].initials} color={members[id].color} size={26} overlap />
+              ) : null
+            )}
           </div>
           <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-3)" }}>
             <Icon name="credit_card" size={15} />
