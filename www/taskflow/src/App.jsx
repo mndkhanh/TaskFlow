@@ -1,11 +1,32 @@
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import { BoardDataProvider } from "./context/BoardDataContext";
+import ProtectedRoute from "./components/layout/ProtectedRoute";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import BoardPage from "./pages/BoardPage";
+
 function App() {
   return (
-    <div className="flex min-h-svh items-center justify-center bg-white dark:bg-gray-900">
-      <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
-        TaskFlow
-      </h1>
-    </div>
-  )
+    <ThemeProvider>
+      <AuthProvider>
+        <BoardDataProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/board/:boardId" element={<BoardPage />} />
+              </Route>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </BoardDataProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  );
 }
 
-export default App
+export default App;
