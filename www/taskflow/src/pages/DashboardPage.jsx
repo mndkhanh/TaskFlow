@@ -5,7 +5,18 @@ import BoardTile from "../components/board/BoardTile";
 import Icon from "../components/ui/Icon";
 
 export default function DashboardPage() {
-  const { boards } = useBoardData();
+  const { boards, workspacesLoading, workspacesError } = useBoardData();
+
+  if (workspacesLoading) {
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center text-sm"
+        style={{ background: "var(--bg)", color: "var(--text-2)" }}
+      >
+        Loading your workspace…
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -14,6 +25,20 @@ export default function DashboardPage() {
         <DashboardHeader />
         <div className="flex-1 overflow-y-auto" style={{ padding: "32px 28px" }}>
           <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            {workspacesError && (
+              <div
+                className="text-sm"
+                style={{
+                  marginBottom: 20,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "var(--danger-soft)",
+                  color: "var(--danger-2)",
+                }}
+              >
+                Couldn’t load your workspaces: {workspacesError}
+              </div>
+            )}
             <div className="flex items-baseline justify-between" style={{ marginBottom: 20 }}>
               <h1 className="text-2xl font-extrabold tracking-tight" style={{ margin: 0 }}>Your boards</h1>
               <span className="text-sm" style={{ color: "var(--text-3)" }}>{boards.length} boards</span>

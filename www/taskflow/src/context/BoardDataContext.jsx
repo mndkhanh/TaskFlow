@@ -1,7 +1,40 @@
-import { createContext, useContext, useMemo, useReducer, useState } from "react";
-import { BOARDS, LABELS, MEMBERS, WORKSPACES, createInitialLists } from "../lib/mockData";
+import { createContext, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "./AuthContext";
+import { BOARDS, LABELS, MEMBERS, createInitialLists } from "../lib/mockData";
 
 const BoardDataContext = createContext(null);
+
+// Palette used to give each workspace a stable accent color in the sidebar/header.
+const WORKSPACE_COLORS = ["#0c55a3", "#0f9d58", "#d97706", "#7c3aed", "#e61c23", "#0891b2"];
+
+function capitalize(value) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+// Collapse workspace_members rows (one per member of each of the user's workspaces)
+// into the display shape the sidebar/header expect: { id, name, initial, color, role }.
+function mapWorkspaces(rows, userId) {
+  const byId = new Map();
+  for (const row of rows) {
+    const ws = row.workspaces;
+    if (!ws) continue;
+    if (!byId.has(ws.id)) byId.set(ws.id, { ws, memberCount: 0, myRole: null });
+    const entry = byId.get(ws.id);
+    entry.memberCount += 1;
+    if (row.user_id === userId) entry.myRole = row.role;
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => new Date(a.ws.created_at) - new Date(b.ws.created_at))
+    .map(({ ws, memberCount, myRole }, i) => ({
+      id: ws.id,
+      name: ws.name,
+      initial: (ws.name?.trim()?.[0] ?? "?").toUpperCase(),
+      color: WORKSPACE_COLORS[i % WORKSPACE_COLORS.length],
+      role: `${capitalize(myRole ?? "member")} · ${memberCount} member${memberCount === 1 ? "" : "s"}`,
+    }));
+}
 
 function listsReducer(lists, action) {
   switch (action.type) {
@@ -79,9 +112,57 @@ function listsReducer(lists, action) {
 }
 
 export function BoardDataProvider({ children }) {
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState(WORKSPACES[0].id);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [workspaces, setWorkspaces] = useState([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(true);
+  const [workspacesError, setWorkspacesError] = useState(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
   const [lists, dispatch] = useReducer(listsReducer, undefined, createInitialLists);
 
+  // Fetch the signed-in user's workspaces. RLS scopes workspace_members to the
+  // workspaces they belong to, so a single unfiltered query gives us every member
+  // row across all their workspaces — enough for the list, their role, and counts.
+  useEffect(() => {
+    if (!userId) {
+      setWorkspaces([]);
+      setActiveWorkspaceId(null);
+      setWorkspacesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setWorkspacesLoading(true);
+    setWorkspacesError(null);
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("workspace_members")
+        .select("user_id, role, workspaces(id, name, created_at)");
+
+      if (cancelled) return;
+
+      if (error) {
+        setWorkspacesError(error.message);
+        setWorkspaces([]);
+        setActiveWorkspaceId(null);
+      } else {
+        const mapped = mapWorkspaces(data ?? [], userId);
+        setWorkspaces(mapped);
+        setActiveWorkspaceId((cur) =>
+          cur && mapped.some((w) => w.id === cur) ? cur : mapped[0]?.id ?? null
+        );
+      }
+      setWorkspacesLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // Boards/lists/cards are still mock; they key off workspace id, so real workspaces
+  // (UUIDs) currently resolve to an empty board list until board-fetching is wired.
   const boardsByWorkspace = useMemo(
     () => BOARDS.filter((b) => b.workspaceId === activeWorkspaceId),
     [activeWorkspaceId]
@@ -90,7 +171,9 @@ export function BoardDataProvider({ children }) {
   const value = {
     members: MEMBERS,
     labels: LABELS,
-    workspaces: WORKSPACES,
+    workspaces,
+    workspacesLoading,
+    workspacesError,
     activeWorkspaceId,
     selectWorkspace: setActiveWorkspaceId,
     boards: boardsByWorkspace,

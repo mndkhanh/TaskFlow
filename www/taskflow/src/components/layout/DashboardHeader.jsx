@@ -17,16 +17,20 @@ export default function DashboardHeader() {
       style={{ height: 64, borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 28px" }}
     >
       <div className="flex flex-1 items-center gap-2.5">
-        <span
-          className="flex items-center justify-center rounded-lg text-sm font-bold text-white"
-          style={{ width: 30, height: 30, background: activeWs.color }}
-        >
-          {activeWs.initial}
-        </span>
-        <div>
-          <div className="text-sm font-bold leading-tight">{activeWs.name}</div>
-          <div className="text-xs" style={{ color: "var(--text-3)" }}>{activeWs.role}</div>
-        </div>
+        {activeWs && (
+          <>
+            <span
+              className="flex items-center justify-center rounded-lg text-sm font-bold text-white"
+              style={{ width: 30, height: 30, background: activeWs.color }}
+            >
+              {activeWs.initial}
+            </span>
+            <div>
+              <div className="text-sm font-bold leading-tight">{activeWs.name}</div>
+              <div className="text-xs" style={{ color: "var(--text-3)" }}>{activeWs.role}</div>
+            </div>
+          </>
+        )}
       </div>
 
       <div
