@@ -935,6 +935,19 @@ export function BoardDataProvider({ children }) {
     [boards, activeWorkspaceId]
   );
 
+  // Point a board's banner at an external image URL directly (no Storage upload).
+  // Handy for hot-linking an image you already have a URL for; the URL is stored
+  // verbatim in boards.background_url and rendered the same as an uploaded banner.
+  const setBoardBannerUrl = useCallback(async (boardId, url) => {
+    const trimmed = (url || "").trim();
+    if (!trimmed) return { error: { message: "Enter an image URL." } };
+    if (!/^https?:\/\//i.test(trimmed)) return { error: { message: "URL must start with http:// or https://" } };
+    const { error } = await supabase.from("boards").update({ background_url: trimmed }).eq("id", boardId);
+    if (error) return { error };
+    setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, image: trimmed } : b)));
+    return { data: { url: trimmed } };
+  }, []);
+
   const removeBoardBanner = useCallback(async (boardId) => {
     const { error } = await supabase.from("boards").update({ background_url: null }).eq("id", boardId);
     if (error) return { error };
@@ -964,6 +977,7 @@ export function BoardDataProvider({ children }) {
     boardsError,
     createBoard,
     updateBoardBanner,
+    setBoardBannerUrl,
     removeBoardBanner,
     activeBoardId,
     setActiveBoardId,

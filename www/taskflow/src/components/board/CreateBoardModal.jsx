@@ -3,12 +3,14 @@ import { useBoardData } from "../../context/BoardDataContext";
 import Icon from "../ui/Icon";
 
 export default function CreateBoardModal({ onClose }) {
-  const { createBoard, updateBoardBanner } = useBoardData();
+  const { createBoard, updateBoardBanner, setBoardBannerUrl } = useBoardData();
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [bannerMode, setBannerMode] = useState("upload"); // "upload" | "url"
   const [bannerFile, setBannerFile] = useState(null);
   const [bannerPreview, setBannerPreview] = useState(null);
+  const [bannerUrl, setBannerUrl] = useState("");
   const bannerInputRef = useRef(null);
 
   const pickBanner = (e) => {
@@ -36,8 +38,11 @@ export default function CreateBoardModal({ onClose }) {
       setSubmitting(false);
       return setError(createError.message);
     }
-    // Best-effort: a failed banner upload shouldn't block board creation.
-    if (bannerFile && data?.id) await updateBoardBanner(data.id, bannerFile);
+    // Best-effort: a failed banner shouldn't block board creation.
+    if (data?.id) {
+      if (bannerMode === "url" && bannerUrl.trim()) await setBoardBannerUrl(data.id, bannerUrl);
+      else if (bannerMode === "upload" && bannerFile) await updateBoardBanner(data.id, bannerFile);
+    }
     setSubmitting(false);
     onClose();
   };
@@ -86,11 +91,67 @@ export default function CreateBoardModal({ onClose }) {
             style={{ height: 46, padding: "0 14px", border: "1px solid var(--border-2)", background: "var(--surface)", color: "var(--text)" }}
           />
 
-          <div className="text-sm font-semibold" style={{ margin: "18px 0 7px" }}>
-            Banner <span style={{ color: "var(--text-3)", fontWeight: 400 }}>(optional)</span>
+          <div className="flex items-center justify-between" style={{ margin: "18px 0 7px" }}>
+            <div className="text-sm font-semibold">
+              Banner <span style={{ color: "var(--text-3)", fontWeight: 400 }}>(optional)</span>
+            </div>
+            <div
+              className="flex items-center"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 2, gap: 2 }}
+            >
+              {[
+                { key: "upload", label: "Upload" },
+                { key: "url", label: "URL" },
+              ].map((opt) => {
+                const active = bannerMode === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setBannerMode(opt.key)}
+                    className="rounded-md text-xs font-semibold cursor-pointer"
+                    style={{
+                      height: 26,
+                      padding: "0 10px",
+                      border: "none",
+                      background: active ? "var(--surface)" : "transparent",
+                      color: active ? "var(--text)" : "var(--text-3)",
+                      boxShadow: active ? "var(--shadow)" : "none",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <input ref={bannerInputRef} type="file" accept="image/*" onChange={pickBanner} style={{ display: "none" }} />
-          {bannerPreview ? (
+          {bannerMode === "url" ? (
+            <>
+              <input
+                value={bannerUrl}
+                onChange={(e) => setBannerUrl(e.target.value)}
+                placeholder="https://…/image.jpg"
+                className="w-full rounded-lg text-sm outline-none focus:border-[var(--primary)]"
+                style={{ height: 46, padding: "0 14px", border: "1px solid var(--border-2)", background: "var(--surface)", color: "var(--text)" }}
+              />
+              {bannerUrl.trim() && (
+                <div className="relative overflow-hidden rounded-lg" style={{ height: 96, marginTop: 10, border: "1px solid var(--border-2)" }}>
+                  <img
+                    src={bannerUrl}
+                    alt="Banner preview"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                    onLoad={(e) => {
+                      e.currentTarget.style.display = "block";
+                    }}
+                  />
+                </div>
+              )}
+            </>
+          ) : bannerPreview ? (
             <div className="relative overflow-hidden rounded-lg" style={{ height: 96, border: "1px solid var(--border-2)" }}>
               <img src={bannerPreview} alt="Banner preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <button
