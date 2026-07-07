@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useBoardData } from "../../context/BoardDataContext";
+import { useSidebar } from "../../context/SidebarContext";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import CreateBoardModal from "../board/CreateBoardModal";
 import Icon from "../ui/Icon";
 
 export default function Sidebar() {
   const { boards, boardsLoading } = useBoardData();
+  const { collapsed } = useSidebar();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [showCreateBoard, setShowCreateBoard] = useState(false);
+
+  if (collapsed) return null;
 
   return (
     <aside
@@ -26,6 +30,21 @@ export default function Sidebar() {
       <div
         style={{ height: 1, background: "var(--border)", margin: "16px 8px" }}
       />
+
+      <button
+        type="button"
+        onClick={() => navigate("/inbox")}
+        className="flex w-full items-center gap-2.5 rounded-lg text-sm font-medium cursor-pointer hover:bg-[var(--surface-2)]"
+        style={{
+          padding: "9px 8px",
+          border: "none",
+          background: pathname === "/inbox" ? "var(--primary-soft)" : "none",
+          color: pathname === "/inbox" ? "var(--primary)" : "var(--text-2)",
+        }}
+      >
+        <Icon name="inbox" size={18} style={{ flex: "none" }} />
+        <span className="min-w-0 flex-1 truncate text-left">Inbox</span>
+      </button>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div
