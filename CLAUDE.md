@@ -4,9 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This repository currently contains **no source code** — only two planning documents. There is no
-package.json, build tooling, linter, or test runner configured yet. Do not assume any framework
-scaffolding, dependency, or file layout exists until it has actually been created.
+Two planning documents (`prd.md`, `test_requirements.md`) sit at the repo root. Code lives under `www/`:
+
+- `www/admin-dashboard` — React + Vite (JS), TailwindCSS v4 via `@tailwindcss/vite`.
+- `www/taskflow` — React + Vite (JS), TailwindCSS v4 via `@tailwindcss/vite`.
+
+Both are freshly scaffolded (`npm create vite@latest -- --template react`) with the default boilerplate
+markup/CSS stripped out and replaced by a minimal Tailwind placeholder `App.jsx`. No routing, state
+management, Supabase wiring, or app-specific features exist yet — treat both as empty shells.
+
+Common commands (run from inside each project directory):
+
+```
+npm install
+npm run dev      # Vite dev server
+npm run build    # production build
+npm run lint     # ESLint
+npm run preview  # preview production build
+```
+
+There is no root-level package.json/workspace config tying the two projects together — each is
+installed and run independently.
 
 ## The two specs conflict — clarify before building
 
