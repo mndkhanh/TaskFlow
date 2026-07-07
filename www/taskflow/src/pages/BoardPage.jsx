@@ -172,12 +172,19 @@ export default function BoardPage() {
         ) : (
           <BoardListView
             lists={lists}
+            dragTarget={dragTarget}
+            dragCardId={dragCardId}
             composerListId={composerListId}
             composerText={composerText}
             onComposerTextChange={setComposerText}
             onOpenComposer={openComposer}
             onSubmitComposer={handleSubmitComposer}
             onCancelComposer={cancelComposer}
+            onCardDragStart={handleCardDragStart}
+            onCardDragOver={handleCardDragOver}
+            onCardDragEnd={handleCardDragEnd}
+            onListDragOver={handleListDragOver}
+            onListDrop={handleListDrop}
             onCardClick={setOpenCardId}
           />
         )}
