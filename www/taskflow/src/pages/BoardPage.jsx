@@ -148,7 +148,20 @@ export default function BoardPage() {
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div
+        className="flex min-w-0 flex-1 flex-col overflow-hidden"
+        style={
+          board.image
+            ? {
+                // Scrim baked into the image so column text/controls stay readable
+                // over any photo. The header below keeps its own opaque surface.
+                backgroundImage: `linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.45)), url("${board.image}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
+      >
         <BoardHeader board={board} workspaceName={workspaceName} view={view} onViewChange={changeView} />
 
         {listsLoading ? (

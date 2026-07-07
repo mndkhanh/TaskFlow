@@ -5,6 +5,7 @@ import { useTheme } from "../../context/ThemeContext";
 import Avatar from "../ui/Avatar";
 import Icon from "../ui/Icon";
 import IconButton from "../ui/IconButton";
+import SidebarToggle from "./SidebarToggle";
 
 // One segment of the breadcrumb: a URL-style label that opens a dropdown of siblings.
 function CrumbDropdown({ label, strong, items, activeId, emptyLabel, onSelect }) {
@@ -132,12 +133,23 @@ function ViewToggle({ view, onViewChange }) {
 }
 
 export default function BoardHeader({ board, workspaceName, view, onViewChange }) {
-  const { members, boards } = useBoardData();
+  const { members, boards, updateBoardBanner } = useBoardData();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const bannerInputRef = useRef(null);
+  const [bannerBusy, setBannerBusy] = useState(false);
 
   const handleBoardSelect = (b) => {
     if (b.id !== board.id) navigate(`/board/${b.id}`);
+  };
+
+  const handleBannerChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the same file be re-picked later
+    if (!file) return;
+    setBannerBusy(true);
+    await updateBoardBanner(board.id, file);
+    setBannerBusy(false);
   };
 
   return (
@@ -146,6 +158,7 @@ export default function BoardHeader({ board, workspaceName, view, onViewChange }
       style={{ height: 60, borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 20px" }}
     >
       <div className="flex min-w-0 flex-1 items-center" style={{ gap: 2 }}>
+        <SidebarToggle />
         <button
           type="button"
           onClick={() => navigate("/dashboard")}
@@ -167,6 +180,18 @@ export default function BoardHeader({ board, workspaceName, view, onViewChange }
         />
       </div>
       {view && onViewChange && <ViewToggle view={view} onViewChange={onViewChange} />}
+      <input ref={bannerInputRef} type="file" accept="image/*" onChange={handleBannerChange} style={{ display: "none" }} />
+      <button
+        type="button"
+        onClick={() => bannerInputRef.current?.click()}
+        disabled={bannerBusy}
+        title="Change board banner"
+        className="flex items-center gap-1.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ height: 36, padding: "0 12px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-2)" }}
+      >
+        <Icon name="image" size={18} />
+        {bannerBusy ? "Uploading…" : "Banner"}
+      </button>
       <button
         type="button"
         className="flex items-center gap-1.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
