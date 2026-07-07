@@ -6,6 +6,13 @@ export default function BoardColumn({
   list,
   dragTarget,
   dragCardId,
+  isListDragging,
+  listDropBefore,
+  listDropAfter,
+  onListDragStart,
+  onListDragEnd,
+  onListReorderOver,
+  onListReorderDrop,
   onOpenComposer,
   onRenameList,
   onDeleteList,
@@ -56,10 +63,24 @@ export default function BoardColumn({
 
   return (
     <div
-      className="flex flex-none flex-col rounded-2xl"
-      style={{ width: 290, background: "var(--surface-2)", maxHeight: "100%" }}
+      onDragOver={(e) => onListReorderOver(e, list.id)}
+      onDrop={onListReorderDrop}
+      className="relative flex flex-none flex-col rounded-2xl"
+      style={{ width: 290, background: "var(--surface-2)", maxHeight: "100%", opacity: isListDragging ? 0.4 : 1 }}
     >
-      <div className="relative flex items-center gap-2" style={{ padding: "12px 14px 8px" }}>
+      {listDropBefore && (
+        <div className="absolute rounded" style={{ left: -8, top: 0, bottom: 0, width: 4, background: "var(--primary)" }} />
+      )}
+      {listDropAfter && (
+        <div className="absolute rounded" style={{ right: -8, top: 0, bottom: 0, width: 4, background: "var(--primary)" }} />
+      )}
+      <div
+        draggable={!editing}
+        onDragStart={(e) => onListDragStart(e, list.id)}
+        onDragEnd={onListDragEnd}
+        className="relative flex items-center gap-2"
+        style={{ padding: "12px 14px 8px", cursor: editing ? "default" : "grab" }}
+      >
         {editing ? (
           <input
             autoFocus
@@ -159,7 +180,22 @@ export default function BoardColumn({
             onClick={onCardClick}
           />
         ))}
-        {dropAtEnd && <div className="rounded" style={{ height: 3, background: "var(--primary)", margin: "4px 2px" }} />}
+        {list.cards.length === 0 ? (
+          <div
+            className="flex items-center justify-center rounded-lg text-xs font-semibold"
+            style={{
+              minHeight: 44,
+              margin: 2,
+              border: `2px dashed ${dropAtEnd ? "var(--primary)" : "var(--border-2)"}`,
+              background: dropAtEnd ? "var(--surface-3)" : "transparent",
+              color: "var(--text-3)",
+            }}
+          >
+            {dragCardId ? "Drop here" : "No cards"}
+          </div>
+        ) : (
+          dropAtEnd && <div className="rounded" style={{ height: 3, background: "var(--primary)", margin: "4px 2px" }} />
+        )}
       </div>
 
       <button

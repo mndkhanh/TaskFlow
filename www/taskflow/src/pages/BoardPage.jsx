@@ -28,6 +28,7 @@ export default function BoardPage() {
     listsLoading,
     listsError,
     moveCard,
+    moveList,
     addList,
     renameList,
     deleteList,
@@ -44,6 +45,8 @@ export default function BoardPage() {
   const [view, setView] = useState(readStoredView);
   const [dragCardId, setDragCardId] = useState(null);
   const [dragTarget, setDragTarget] = useState(null);
+  const [dragListId, setDragListId] = useState(null);
+  const [listDropTarget, setListDropTarget] = useState(null); // { listId, before } | null
   const [createCardListId, setCreateCardListId] = useState(null);
   const [openCardId, setOpenCardId] = useState(null);
   const [addingList, setAddingList] = useState(false);
@@ -76,6 +79,7 @@ export default function BoardPage() {
   };
 
   const handleCardDragOver = (e, cardId, listId) => {
+    if (dragListId) return; // a column is being dragged, not a card
     e.preventDefault();
     e.stopPropagation();
     if (dragCardId === cardId) return;
@@ -87,6 +91,7 @@ export default function BoardPage() {
   };
 
   const handleListDragOver = (e, listId) => {
+    if (dragListId) return; // a column is being dragged, not a card
     e.preventDefault();
     if (!dragTarget || dragTarget.listId !== listId || dragTarget.cardId !== null) {
       setDragTarget({ listId, cardId: null, before: false });
@@ -94,6 +99,7 @@ export default function BoardPage() {
   };
 
   const handleListDrop = (e, listId) => {
+    if (dragListId) return; // handled by the column-reorder drop
     e.preventDefault();
     if (dragCardId) {
       moveCard(dragCardId, listId, dragTarget?.cardId ?? null);
@@ -105,6 +111,60 @@ export default function BoardPage() {
   const handleCardDragEnd = () => {
     setDragCardId(null);
     setDragTarget(null);
+  };
+
+  // Column (list) reordering — horizontal only, kanban view. The column header is
+  // the drag handle; grabbing a card still drags the card, not the column.
+  const handleListDragStart = (e, listId) => {
+    setDragListId(listId);
+    try {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", listId);
+    } catch {
+      // drag data unavailable in some browsers; drag still works via state
+    }
+  };
+
+  const handleListReorderOver = (e, listId) => {
+    if (!dragListId || dragListId === listId) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const before = e.clientX - rect.left < rect.width / 2;
+    if (!listDropTarget || listDropTarget.listId !== listId || listDropTarget.before !== before) {
+      setListDropTarget({ listId, before });
+    }
+  };
+
+  // Hovering the trailing "add list" affordance drops the column at the very end.
+  const handleListReorderToEnd = (e) => {
+    if (!dragListId) return;
+    e.preventDefault();
+    const last = lists[lists.length - 1];
+    if (last && (!listDropTarget || listDropTarget.listId !== last.id || listDropTarget.before !== false)) {
+      setListDropTarget({ listId: last.id, before: false });
+    }
+  };
+
+  const handleListReorderDrop = (e) => {
+    if (!dragListId) return;
+    e.preventDefault();
+    if (listDropTarget) {
+      let beforeId;
+      if (listDropTarget.before) {
+        beforeId = listDropTarget.listId;
+      } else {
+        const idx = lists.findIndex((l) => l.id === listDropTarget.listId);
+        beforeId = lists[idx + 1]?.id ?? null;
+      }
+      moveList(dragListId, beforeId);
+    }
+    setDragListId(null);
+    setListDropTarget(null);
+  };
+
+  const handleListDragEnd = () => {
+    setDragListId(null);
+    setListDropTarget(null);
   };
 
   const openCard = (() => {
@@ -180,6 +240,13 @@ export default function BoardPage() {
                 list={list}
                 dragTarget={dragTarget}
                 dragCardId={dragCardId}
+                isListDragging={dragListId === list.id}
+                listDropBefore={!!(dragListId && listDropTarget?.listId === list.id && listDropTarget.before)}
+                listDropAfter={!!(dragListId && listDropTarget?.listId === list.id && !listDropTarget.before)}
+                onListDragStart={handleListDragStart}
+                onListDragEnd={handleListDragEnd}
+                onListReorderOver={handleListReorderOver}
+                onListReorderDrop={handleListReorderDrop}
                 onOpenComposer={setCreateCardListId}
                 onRenameList={renameList}
                 onDeleteList={deleteList}
@@ -193,6 +260,8 @@ export default function BoardPage() {
             ))}
             {addingList ? (
               <div
+                onDragOver={handleListReorderToEnd}
+                onDrop={handleListReorderDrop}
                 className="flex flex-none flex-col gap-2 rounded-2xl"
                 style={{ width: 290, padding: 12, background: "var(--surface-2)" }}
               >
@@ -237,6 +306,8 @@ export default function BoardPage() {
               <button
                 type="button"
                 onClick={() => setAddingList(true)}
+                onDragOver={handleListReorderToEnd}
+                onDrop={handleListReorderDrop}
                 className="flex flex-none items-center gap-2 rounded-2xl text-sm font-semibold cursor-pointer hover:bg-[var(--surface-3)]"
                 style={{ width: 290, padding: "13px 14px", border: "none", background: "var(--surface-2)", color: "var(--text-2)" }}
               >

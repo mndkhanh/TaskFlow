@@ -541,6 +541,37 @@ export function BoardDataProvider({ children }) {
     [persistPositions]
   );
 
+  // Persist the current column order by writing each list's position index.
+  // On any failure, refetch the board to reconcile the optimistic update.
+  const persistListPositions = useCallback(
+    async (nextLists) => {
+      const results = await Promise.all(
+        nextLists.map((list, index) => supabase.from("lists").update({ position: index }).eq("id", list.id))
+      );
+      if (results.some((r) => r.error)) await reconcile();
+    },
+    [reconcile]
+  );
+
+  // Reorder a list (column) so it lands before `beforeListId` (or at the end when
+  // null), optimistically, then persist the new column positions.
+  const moveList = useCallback(
+    (listId, beforeListId) => {
+      const cur = listsRef.current;
+      const from = cur.findIndex((l) => l.id === listId);
+      if (from < 0) return;
+      const next = [...cur];
+      const [moved] = next.splice(from, 1);
+      let idx = beforeListId ? next.findIndex((l) => l.id === beforeListId) : next.length;
+      if (idx < 0) idx = next.length;
+      next.splice(idx, 0, moved);
+      if (next.every((l, i) => l.id === cur[i].id)) return; // order unchanged
+      setLists(next);
+      persistListPositions(next);
+    },
+    [persistListPositions]
+  );
+
   // Insert a list (column) at the end of the board, then append it to local state.
   const addList = useCallback(
     async (title) => {
@@ -940,6 +971,7 @@ export function BoardDataProvider({ children }) {
     listsLoading,
     listsError,
     moveCard,
+    moveList,
     addList,
     renameList,
     deleteList,

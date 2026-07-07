@@ -232,7 +232,22 @@ function ListSection({
             onClick={onCardClick}
           />
         ))}
-        {dropAtEnd && <DropLine />}
+        {list.cards.length === 0 ? (
+          <div
+            className="flex items-center justify-center rounded-lg text-xs font-semibold"
+            style={{
+              minHeight: 40,
+              margin: "8px 12px",
+              border: `2px dashed ${dropAtEnd ? "var(--primary)" : "var(--border-2)"}`,
+              background: dropAtEnd ? "var(--surface-2)" : "transparent",
+              color: "var(--text-3)",
+            }}
+          >
+            {dragCardId ? "Drop here" : "No cards"}
+          </div>
+        ) : (
+          dropAtEnd && <DropLine />
+        )}
       </div>
 
       <button
