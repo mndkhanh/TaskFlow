@@ -9,8 +9,9 @@ target" below. Code lives under `www/`:
 
 - `www/taskflow` — the active build. React 19 + Vite, React Router v7, TailwindCSS v4 via `@tailwindcss/vite`.
   A Kanban UI (login, dashboard, board with drag-and-drop cards) is scaffolded and routed. **Auth,
-  workspaces, and boards are now wired to real Supabase; lists/cards are still in-memory mock data** — see
-  "taskflow frontend architecture" below for exactly where the seam is.
+  workspaces, boards, and lists/cards are now wired to real Supabase.** Still not persisted: card
+  checklists/comments/assignees (in-memory only), and labels/attachments have no backing tables at all —
+  see "taskflow frontend architecture" below.
 - `www/admin-dashboard` — still the untouched Vite/React default template (a single placeholder `App.jsx`).
   Not yet started.
 
@@ -97,10 +98,15 @@ matters: `BoardDataContext` calls `useAuth()` for the current user id), then `Br
   color), and creates new ones through the `create_workspace` RPC (then refetches and switches to it).
   Boards are also real: on `activeWorkspaceId` change it fetches from the `boards` table (RLS-scoped),
   maps rows to the tile display shape via `mapBoards` (synthesizing a stable gradient/`color` by list
-  position since the table only stores an optional `background_url`; `cardCount`/`avatars` stay empty
-  until cards are wired), and `createBoard` inserts then refetches. Lists/cards are **still mock** from
-  `lib/mockData.js`: `lists` is a `useReducer` over mock data (`MOVE_CARD`, `ADD_CARD`,
-  `TOGGLE_CHECKLIST_ITEM`, `ADD_COMMENT`), so every real board opens onto the same mock columns for now.
+  position since the table only stores an optional `background_url`; `cardCount`/`avatars` stay empty),
+  and `createBoard` inserts the board **plus four default lists** (`DEFAULT_LIST_TITLES`) so it's usable
+  immediately. Lists/cards are real too: `BoardPage` pushes the routed `boardId` into `activeBoardId`,
+  which triggers a nested `lists(…, cards(…))` fetch (RLS-scoped, ordered by `position`). `lists` is now
+  plain `useState` (not a reducer); `moveCard` applies an optimistic reorder then persists via
+  `persistPositions` (writes each affected card's `list_id` + index; refetches to reconcile on error),
+  and `addCard` inserts then appends the real row. `toggleChecklistItem`/`addComment` still mutate
+  in-memory only — checklists/comments/assignees aren't persisted yet, and `labels`/`attachments` map to
+  empty arrays because those tables don't exist. `mapCard` carries a `position` field the UI ignores.
 - **`ThemeContext`** (`context/ThemeContext.jsx`) — light/dark theme, applied as CSS custom properties
   (`lib/theme.js` token maps) set on `document.documentElement` rather than via Tailwind's `dark:` classes.
 
@@ -108,14 +114,18 @@ Component layout: `pages/` (LoginPage, DashboardPage, BoardPage) compose `compon
 (Sidebar, DashboardHeader, BoardHeader, ProtectedRoute, plus `WorkspaceSwitcher` — the workspace dropdown —
 and `CreateWorkspaceModal`) and `components/board/` (BoardColumn, BoardCard, BoardTile, CardComposer,
 CardModal, plus `BoardListView` and `CreateBoardModal`), with low-level pieces in `components/ui/` (Icon,
-IconButton, Avatar). `BoardPage.jsx` renders the board in one of two views — **kanban** (horizontal
-`BoardColumn`s with native HTML5 drag-and-drop; no `dnd-kit`/`@hello-pangea/dnd` despite `prd.md` proposing
-them — reorder/move logic is the `MOVE_CARD` reducer case) or **list** (`BoardListView`, vertical stacked
-sections of compact card rows, no drag). The active view is a segmented toggle in `BoardHeader` and is
-persisted to `localStorage` under `tf.boardView`.
+IconButton, Avatar). `BoardHeader`'s left side is a URL-style breadcrumb: the workspace name links back to
+`/dashboard`, and the board name is a `CrumbDropdown` for switching boards. `BoardPage.jsx` renders the
+board in one of two views — **kanban** (horizontal `BoardColumn`s) or **list** (`BoardListView`, vertical
+stacked sections of compact card rows). **Both views** use the same native HTML5 drag-and-drop (no
+`dnd-kit`/`@hello-pangea/dnd` despite `prd.md` proposing them) — the drag handlers live in `BoardPage` and
+call `moveCard`; there's a single drag state shared across views. The active view is a segmented toggle in
+`BoardHeader`, persisted to `localStorage` under `tf.boardView`.
 
-**Remaining data-wiring work:** the auth, workspace, and board seams are done. What's left is replacing the
-mock `lists` reducer with Supabase queries/mutations (and eventually Realtime) against the `lists`/`cards`
-tables, keyed on the real board UUID — the action/shape contracts consumers depend on (`lists`, `moveCard`,
-`addCard`, etc.) are meant to stay stable across that swap. Note `mapBoards`' `cardCount`/`avatars` are
-hardcoded to empty and become real only once cards are wired.
+**Remaining data-wiring work:** auth, workspaces, boards, and lists/cards are wired. What's left:
+persist card **checklists** (`checklists` table), **comments** (`comments` table — join `profiles` for the
+author), and **assignees** (`card_assignees` + `profiles`); these are currently in-memory only. `labels`
+and `attachments` have **no tables** — adding them means a schema change first (see the Supabase section).
+Realtime subscriptions on `lists`/`cards` are also not wired. Adding lists from the UI ("Add another list"
+button) is still inert — only `createBoard`'s default seed creates lists, so **boards created before this
+change have no lists** and open empty.

@@ -16,20 +16,11 @@ export default function DashboardHeader() {
       className="flex flex-none items-center gap-4"
       style={{ height: 64, borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 28px" }}
     >
-      <div className="flex flex-1 items-center gap-2.5">
+      <div className="flex min-w-0 flex-1 items-center">
         {activeWs && (
-          <>
-            <span
-              className="flex items-center justify-center rounded-lg text-sm font-bold text-white"
-              style={{ width: 30, height: 30, background: activeWs.color }}
-            >
-              {activeWs.initial}
-            </span>
-            <div>
-              <div className="text-sm font-bold leading-tight">{activeWs.name}</div>
-              <div className="text-xs" style={{ color: "var(--text-3)" }}>{activeWs.role}</div>
-            </div>
-          </>
+          <span className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)" }}>
+            {activeWs.name}
+          </span>
         )}
       </div>
 

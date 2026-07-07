@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useBoardData } from "../context/BoardDataContext";
 import Sidebar from "../components/layout/Sidebar";
@@ -17,10 +17,26 @@ function readStoredView() {
 export default function BoardPage() {
   const { boardId } = useParams();
   const navigate = useNavigate();
-  const { boards, boardsLoading, workspaces, lists, moveCard, addCard } = useBoardData();
+  const {
+    boards,
+    boardsLoading,
+    workspaces,
+    activeBoardId,
+    setActiveBoardId,
+    lists,
+    listsLoading,
+    listsError,
+    moveCard,
+    addCard,
+  } = useBoardData();
 
   const board = boards.find((b) => b.id === boardId) ?? null;
   const workspaceName = workspaces.find((w) => w.id === board?.workspaceId)?.name ?? "";
+
+  // Tell the data layer which board's lists/cards to load.
+  useEffect(() => {
+    if (boardId && boardId !== activeBoardId) setActiveBoardId(boardId);
+  }, [boardId, activeBoardId, setActiveBoardId]);
 
   const [view, setView] = useState(readStoredView);
   const [dragCardId, setDragCardId] = useState(null);
@@ -138,7 +154,15 @@ export default function BoardPage() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <BoardHeader board={board} workspaceName={workspaceName} view={view} onViewChange={changeView} />
 
-        {view === "kanban" ? (
+        {listsLoading ? (
+          <div className="flex flex-1 items-center justify-center text-sm" style={{ color: "var(--text-3)" }}>
+            Loading lists…
+          </div>
+        ) : listsError ? (
+          <div className="flex flex-1 items-center justify-center text-sm" style={{ color: "var(--danger-2)" }}>
+            Couldn’t load this board: {listsError}
+          </div>
+        ) : view === "kanban" ? (
           <div className="flex flex-1 items-start gap-3.5 overflow-x-auto overflow-y-hidden" style={{ padding: 20 }}>
             {lists.map((list) => (
               <BoardColumn
