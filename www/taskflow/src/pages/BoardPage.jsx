@@ -29,6 +29,8 @@ export default function BoardPage() {
     listsError,
     moveCard,
     addList,
+    renameList,
+    deleteList,
   } = useBoardData();
 
   const board = boards.find((b) => b.id === boardId) ?? null;
@@ -166,6 +168,8 @@ export default function BoardPage() {
                 dragTarget={dragTarget}
                 dragCardId={dragCardId}
                 onOpenComposer={setCreateCardListId}
+                onRenameList={renameList}
+                onDeleteList={deleteList}
                 onCardDragStart={handleCardDragStart}
                 onCardDragOver={handleCardDragOver}
                 onCardDragEnd={handleCardDragEnd}
@@ -234,6 +238,8 @@ export default function BoardPage() {
             dragTarget={dragTarget}
             dragCardId={dragCardId}
             onOpenComposer={setCreateCardListId}
+            onRenameList={renameList}
+            onDeleteList={deleteList}
             onCardDragStart={handleCardDragStart}
             onCardDragOver={handleCardDragOver}
             onCardDragEnd={handleCardDragEnd}

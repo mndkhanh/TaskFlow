@@ -557,6 +557,30 @@ export function BoardDataProvider({ children }) {
     [activeBoardId]
   );
 
+  // Rename a list (optimistic), then persist.
+  const renameList = useCallback(
+    async (listId, title) => {
+      const t = title.trim();
+      if (!t) return {};
+      setLists((cur) => cur.map((l) => (l.id === listId ? { ...l, title: t } : l)));
+      const { error } = await supabase.from("lists").update({ title: t }).eq("id", listId);
+      if (error) await reconcile();
+      return { error };
+    },
+    [reconcile]
+  );
+
+  // Delete a list and its cards (DB cascades), removing it from state.
+  const deleteList = useCallback(
+    async (listId) => {
+      setLists((cur) => cur.filter((l) => l.id !== listId));
+      const { error } = await supabase.from("lists").delete().eq("id", listId);
+      if (error) await reconcile();
+      return { error };
+    },
+    [reconcile]
+  );
+
   // Insert a card at the end of a list with optional attributes (description, due
   // date, labels, assignees), persist any join rows, then append it to state.
   const addCard = useCallback(
@@ -868,6 +892,8 @@ export function BoardDataProvider({ children }) {
     listsError,
     moveCard,
     addList,
+    renameList,
+    deleteList,
     addCard,
     updateCard,
     deleteCard,
