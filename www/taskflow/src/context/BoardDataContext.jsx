@@ -507,7 +507,10 @@ export function BoardDataProvider({ children }) {
   }, []);
 
   // Owner-only invite by email. Queues a pending invite the recipient accepts
-  // later. Returns { status }: 'invited' or 'already_member'.
+  // later, then best-effort sends them a notification email via the
+  // `send-invite-email` edge function (the queued invite is the source of
+  // truth; a failed email doesn't fail the invite). Returns { status }
+  // ('invited' | 'already_member') plus { emailSent, emailError } on 'invited'.
   const inviteToWorkspace = useCallback(async (workspaceId, email, role = "member") => {
     const { data, error } = await supabase.rpc("invite_to_workspace", {
       p_workspace_id: workspaceId,
@@ -515,7 +518,27 @@ export function BoardDataProvider({ children }) {
       p_role: role,
     });
     if (error) return { error };
-    return { status: data?.status ?? "invited" };
+    const status = data?.status ?? "invited";
+    if (status !== "invited") return { status };
+
+    let emailSent = false;
+    let emailError = null;
+    try {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke("send-invite-email", {
+        body: {
+          workspaceId,
+          email,
+          role,
+          acceptUrl: `${window.location.origin}/dashboard`,
+        },
+      });
+      if (fnError) emailError = fnError.message;
+      else if (fnData?.sent) emailSent = true;
+      else emailError = fnData?.error ?? "Email not sent";
+    } catch (err) {
+      emailError = err?.message ?? "Email not sent";
+    }
+    return { status, emailSent, emailError };
   }, []);
 
   // Owner-only: change a member's role (RLS enforces owner).
