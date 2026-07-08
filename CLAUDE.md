@@ -11,7 +11,8 @@ target" below. Code lives under `www/`:
   A Kanban UI (login, dashboard, board with drag-and-drop cards) is scaffolded and routed. **Nearly all
   data is now wired to real Supabase** — auth, workspaces, boards, lists/cards, and card
   checklists/comments/assignees/labels/attachments all persist (attachments via a Supabase Storage bucket).
-  What's left is Realtime subscriptions — see "taskflow frontend architecture" below.
+  Workspace member management + invitations and Realtime (board lists/cards + Inbox) are also wired — see
+  "taskflow frontend architecture" below.
 - `www/admin-dashboard` — still the untouched Vite/React default template (a single placeholder `App.jsx`).
   Not yet started.
 
@@ -54,32 +55,47 @@ The Supabase project is named **TaskFlow** (ref `eyrxpgfwjoucgfjqinro`, region a
   (Workspace-RBAC: owner/member write, viewer read-only), and `harden_functions.sql` (moves internal
   RLS-helper functions into a non-exposed `private` schema and pins `search_path` on every function — see
   below; **also** carries the labels/card_labels/attachments RLS policies, the `card-attachments`
-  Storage bucket + its member-scoped storage policies, and — appended at the end — the **public**
-  `board-banners` Storage bucket + member-gated write policies for board banner images).
+  Storage bucket + its member-scoped storage policies, the **public** `board-banners` Storage bucket +
+  member-gated write policies for board banner images, the `activities`/`activity_reads` tables, and — at
+  the very end — the workspace-membership layer: the `workspace_invitations` table + RLS, and SECURITY
+  DEFINER RPCs implementing an **explicit accept/decline invitation flow** (`list_workspace_members` —
+  members-with-email, since `auth.users` isn't readable by `authenticated`; `invite_to_workspace` —
+  owner-only, always queues a *pending* invite for an email; `list_my_invitations` — invites addressed to
+  the caller by email, with workspace + inviter info; `accept_invitation`/`decline_invitation` — the
+  invitee joins or discards). No auto-join: the invitee must accept.
 - `supabase/functions/` — placeholder for edge functions; empty so far.
+
+The workspace-membership section at the tail of `harden_functions.sql` (the `workspace_invitations` table
++ the `list_workspace_members` / `invite_to_workspace` / `list_my_invitations` / `accept_invitation` /
+`decline_invitation` RPCs) **is live on the remote** — applied by hand via the SQL Editor (the MCP was
+read-only this session, so it was not recorded as a migration; same out-of-band pattern as the rest of this
+file). Note the `RETURNS TABLE` gotcha it surfaced: `list_my_invitations` has an output column named `id`,
+so any *unqualified* `id` in its body is ambiguous — the `auth.users` lookup must be aliased
+(`from auth.users au where au.id = auth.uid()`), not `where id = auth.uid()`.
 
 There is deliberately no `supabase/migrations/` directory — we don't use the CLI's local migration-folder
 workflow. These four files have already been applied to the remote project.
 
-**Known drift:** the taskflow frontend calls a `create_workspace` Postgres RPC (`supabase.rpc("create_workspace", …)`
-in `BoardDataContext.jsx`), and a code comment there points to `supabase/db/workspace_functions.sql` — but
-that file does not exist in `supabase/db/` yet. The function **does exist on the remote** (`public.create_workspace`,
-confirmed 2026-07-08) but is absent from both the captured SQL and the migration history — it was applied
-out-of-band. Capture it (add `workspace_functions.sql` with the RPC's definition) before treating
-`supabase/db/` as a faithful mirror of the remote.
+**The recorded `harden_functions` migration is a stale snapshot of `harden_functions.sql` (verified
+2026-07-08).** The migration history records exactly four migrations — `initial_schema`,
+`functions_triggers`, `rls_policies`, `harden_functions` — but the *recorded text* of the
+`harden_functions` migration predates most of the current file. Everything from roughly line 315 onward of
+`supabase/db/harden_functions.sql` — the `public.create_workspace` RPC, the card-labels/attachments RLS +
+`card-attachments` Storage bucket, the `board-banners` Storage bucket, and the `activities`/`activity_reads`
+tables — is **not** in the recorded migration statements, yet **all of it is live on the remote** (applied
+out-of-band via `execute_sql`/console rather than a recorded `apply_migration`). So the **file is the source
+of truth** and matches the remote; the migration *log* just doesn't record how those objects got there.
+Confirmed present on the remote 2026-07-08: `public.create_workspace` (SECURITY DEFINER, `search_path=''`,
+EXECUTE for `authenticated`/`service_role`), both the `card-attachments` (private) and `board-banners`
+(public) buckets with their policies, and the activity tables — so banner *uploads* work (this was formerly
+flagged as a bucket-missing runtime bug; it has since been resolved). Re-verify against the live project
+(`list_migrations`, query the migration `statements`, `storage.buckets`, `pg_policies`) before trusting this
+note — it's the most perishable part of this doc.
 
-**Not-yet-applied (still failing):** the `board-banners` Storage bucket + policies (now the trailing
-section of `harden_functions.sql`, formerly the standalone `board_banners.sql`) were authored but **never
-applied to the remote** — confirmed 2026-07-08 that the bucket does not exist (only `card-attachments`
-does), and the migration history holds just the four migrations below. This is a **live runtime bug**: even
-though the banner feature is merged to `main`, deployed, and fully wired in the frontend
-(`updateBoardBanner`/`removeBoardBanner`), any banner *upload* fails because the target bucket is missing.
-(Setting a banner by external URL via `setBoardBannerUrl` writes straight to `boards.background_url` and
-works without the bucket.) Apply that bucket section via `apply_migration` (then run `get_advisors`) to fix
-uploads.
-
-The remote migration history currently records exactly four migrations, in order: `initial_schema`,
-`functions_triggers`, `rls_policies`, `harden_functions`.
+Do **not** re-split `create_workspace` into a separate `supabase/db/workspace_functions.sql` — it already
+lives inline in `harden_functions.sql`, and the `createWorkspace` comment in `BoardDataContext.jsx` already
+points there correctly. If you ever reconcile the drift, prefer re-recording the current
+`harden_functions.sql` as a fresh migration over hand-authoring split files.
 
 **Applying future schema changes:** edit/add SQL in `supabase/db/`, then apply that same SQL to the
 remote project via the Supabase MCP `apply_migration` tool (not `execute_sql` — that one's for querying,
@@ -124,7 +140,20 @@ matters: `BoardDataContext` calls `useAuth()` for the current user id), then `Br
 - **`BoardDataContext`** (`context/BoardDataContext.jsx`) — **hybrid, mid-migration.** Workspaces are
   real: it queries `workspace_members` (RLS scopes rows to the user's workspaces) joined to `workspaces`,
   collapses them via `mapWorkspaces` into the sidebar's display shape (assigning each a stable accent
-  color), and creates new ones through the `create_workspace` RPC (then refetches and switches to it).
+  color; `mapWorkspaces` also carries the raw `myRole` + `memberCount`, and the context exposes
+  `activeWorkspace`/`activeRole` for gating owner-only actions), and creates new ones through the
+  `create_workspace` RPC (then refetches and switches to it). **Workspace member management + invitations
+  are wired:** `listWorkspaceMembers`/`listWorkspaceInvitations`, `inviteToWorkspace` (owner queues a
+  pending email invite — no auto-join), `updateMemberRole`, `removeMember`, `revokeInvitation`,
+  `leaveWorkspace`, and workspace settings `renameWorkspace`/`deleteWorkspace` — role changes/removal/
+  leave/rename/delete are plain table writes gated by the existing `workspace_members`/`workspaces` RLS;
+  invitations go through the workspace-membership RPCs at the tail of `harden_functions.sql`. The
+  **invitee side** is `myInvitations` (fetched via `list_my_invitations` on login) + `acceptInvitation`
+  (joins + switches to the workspace) / `declineInvitation`; the manage UI lives in
+  `components/layout/WorkspaceModal.jsx` (a tabbed Members/Settings modal) opened from the two (previously
+  dead) `WorkspaceSwitcher` menu rows — "Invite and manage members" and "Settings" — while pending
+  invitations for the current user surface **inside the `WorkspaceSwitcher` "Switch workspace" flyout**
+  (above "Create workspace", with Accept/Decline) plus a red count badge on the switcher.
   Boards are also real: on `activeWorkspaceId` change it fetches from the `boards` table (RLS-scoped),
   maps rows to the tile display shape via `mapBoards` (synthesizing a stable gradient/`color` by list
   position since the table only stores an optional `background_url`; `cardCount`/`avatars` stay empty),
@@ -172,8 +201,12 @@ filter count. Note there is **no** separate header settings popover — View/Fil
 live in these tabs by design.
 
 **Remaining data-wiring work:** auth, workspaces, boards, lists/cards, and all card detail
-(checklists, comments, assignees, labels, attachments) are wired. The main gap left is **Realtime
-subscriptions** on `lists`/`cards` (still not wired — changes from other clients don't push through).
+(checklists, comments, assignees, labels, attachments) are wired. **Realtime is now wired** in
+`BoardDataContext`: two `postgres_changes` subscriptions — one per open board (`lists` filtered by
+`board_id` + `cards` related via `list_id`) that debounce-refetches the board, and one per active
+workspace on `activities` that debounce-refreshes the Inbox. Both respect RLS. **Requires the tables to be
+in the `supabase_realtime` publication** (`alter publication supabase_realtime add table public.lists,
+public.cards, public.activities;`) — applied by hand via the SQL Editor since the MCP was read-only.
 Board **banners** are wired: `updateBoardBanner`/`removeBoardBanner` upload to the `board-banners`
 bucket and store the public URL in `boards.background_url`; `mapBoards` exposes it as `board.image`
 (rendered as the tile banner and the board-page background, with a `board.gradient` fallback still
@@ -192,5 +225,6 @@ RLS-filtered `activity_reads` so a non-empty array means "read"), exposes `activ
 (unread excludes your own actions) and `markActivityRead`/`markActivityUnread`/`markAllActivitiesRead`/
 `refreshActivities`. `pages/InboxPage` renders the cross-board feed with read/unread controls (row click
 marks read + navigates to the board), and `Sidebar` shows an unread badge on the Inbox item. Not yet wired:
-Realtime, so another client's new activity only appears on refetch (workspace switch / opening the Inbox).
+Realtime is wired (see above): a `postgres_changes` subscription on `activities` (filtered by workspace)
+debounce-refreshes the feed, so another client's new activity appears live once the publication is enabled.
 Theme choice persists to `localStorage` under `tf.theme` (falling back to the OS `prefers-color-scheme`).
