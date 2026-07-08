@@ -917,3 +917,34 @@ create policy "Users can delete their own avatar"
   on storage.objects for delete
   to authenticated
   using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ============================================================================
+-- Realtime: add the tables the frontend subscribes to (BoardDataContext) to the
+-- `supabase_realtime` publication so Postgres emits change events. Realtime
+-- still enforces RLS on delivery, so a client only receives changes for rows it
+-- can read. Idempotent — `alter publication ... add table` errors if the table
+-- is already a member, so each add is guarded.
+--   * lists, cards  — live board sync (per open board)
+--   * activities    — live Inbox feed
+-- ============================================================================
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lists'
+  ) then
+    alter publication supabase_realtime add table public.lists;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'cards'
+  ) then
+    alter publication supabase_realtime add table public.cards;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'activities'
+  ) then
+    alter publication supabase_realtime add table public.activities;
+  end if;
+end $$;

@@ -205,8 +205,9 @@ live in these tabs by design.
 `BoardDataContext`: two `postgres_changes` subscriptions — one per open board (`lists` filtered by
 `board_id` + `cards` related via `list_id`) that debounce-refetches the board, and one per active
 workspace on `activities` that debounce-refreshes the Inbox. Both respect RLS. **Requires the tables to be
-in the `supabase_realtime` publication** (`alter publication supabase_realtime add table public.lists,
-public.cards, public.activities;`) — applied by hand via the SQL Editor since the MCP was read-only.
+in the `supabase_realtime` publication** — recorded as an idempotent `do $$ … $$` block at the tail of
+`harden_functions.sql` (adds `lists`, `cards`, `activities`). Like the rest of that file it must be applied
+to the remote by hand (SQL Editor) since the MCP was read-only; realtime stays dormant until it is.
 Board **banners** are wired: `updateBoardBanner`/`removeBoardBanner` upload to the `board-banners`
 bucket and store the public URL in `boards.background_url`; `mapBoards` exposes it as `board.image`
 (rendered as the tile banner and the board-page background, with a `board.gradient` fallback still
