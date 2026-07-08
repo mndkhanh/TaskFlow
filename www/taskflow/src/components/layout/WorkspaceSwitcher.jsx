@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useBoardData } from "../../context/BoardDataContext";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
+import WorkspaceModal from "./WorkspaceModal";
 import Icon from "../ui/Icon";
 
 // A single row in the workspace menu.
@@ -22,16 +23,32 @@ function MenuRow({ icon, label, onClick, onMouseEnter, trailing, danger }) {
   );
 }
 
+// Small count badge used to flag pending invitations.
+function CountBadge({ count, style }) {
+  return (
+    <span
+      className="flex flex-none items-center justify-center rounded-full text-xs font-bold text-white"
+      style={{ minWidth: 18, height: 18, padding: "0 5px", background: "var(--danger)", ...style }}
+    >
+      {count}
+    </span>
+  );
+}
+
 export default function WorkspaceSwitcher() {
-  const { workspaces, activeWorkspaceId, selectWorkspace } = useBoardData();
+  const { workspaces, activeWorkspaceId, selectWorkspace, myInvitations, refreshMyInvitations, acceptInvitation, declineInvitation } =
+    useBoardData();
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [showSwitch, setShowSwitch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [manageTab, setManageTab] = useState(null); // "members" | "settings" | null
+  const [busyInvite, setBusyInvite] = useState(null);
   const rootRef = useRef(null);
 
   const activeWs = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
+  const inviteCount = myInvitations.length;
 
   // Close the menu on outside click or Escape.
   useEffect(() => {
@@ -55,6 +72,12 @@ export default function WorkspaceSwitcher() {
     if (!open) setShowSwitch(false);
   }, [open]);
 
+  // There's no realtime yet, so re-pull pending invitations each time the menu
+  // opens — this is how an invite from another user shows up without a full reload.
+  useEffect(() => {
+    if (open) refreshMyInvitations();
+  }, [open, refreshMyInvitations]);
+
   const closeMenu = () => {
     setOpen(false);
     setShowSwitch(false);
@@ -70,10 +93,28 @@ export default function WorkspaceSwitcher() {
     setShowCreate(true);
   };
 
+  const openManage = (tab) => {
+    closeMenu();
+    setManageTab(tab);
+  };
+
   const handleLogout = () => {
     closeMenu();
     logout();
     navigate("/login");
+  };
+
+  const handleAccept = async (id) => {
+    setBusyInvite(id);
+    const { error } = await acceptInvitation(id);
+    setBusyInvite(null);
+    if (!error) closeMenu();
+  };
+
+  const handleDecline = async (id) => {
+    setBusyInvite(id);
+    await declineInvitation(id);
+    setBusyInvite(null);
   };
 
   return (
@@ -108,6 +149,7 @@ export default function WorkspaceSwitcher() {
             No workspace
           </span>
         )}
+        {inviteCount > 0 && <CountBadge count={inviteCount} />}
         <Icon name="unfold_more" size={18} style={{ color: "var(--text-3)", flex: "none" }} />
       </button>
 
@@ -123,13 +165,13 @@ export default function WorkspaceSwitcher() {
             animation: "tf-pop .14s ease",
           }}
         >
-          <MenuRow icon="settings" label="Settings" onClick={closeMenu} onMouseEnter={() => setShowSwitch(false)} />
           <MenuRow
             icon="group"
             label="Invite and manage members"
-            onClick={closeMenu}
+            onClick={() => openManage("members")}
             onMouseEnter={() => setShowSwitch(false)}
           />
+          <MenuRow icon="settings" label="Settings" onClick={() => openManage("settings")} onMouseEnter={() => setShowSwitch(false)} />
 
           <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
 
@@ -143,7 +185,12 @@ export default function WorkspaceSwitcher() {
               icon="swap_horiz"
               label="Switch workspace"
               onClick={() => setShowSwitch((v) => !v)}
-              trailing={<Icon name="chevron_right" size={18} style={{ color: "var(--text-3)", flex: "none" }} />}
+              trailing={
+                <span className="flex items-center gap-1.5">
+                  {inviteCount > 0 && <CountBadge count={inviteCount} />}
+                  <Icon name="chevron_right" size={18} style={{ color: "var(--text-3)", flex: "none" }} />
+                </span>
+              }
             />
 
             {showSwitch && (
@@ -192,6 +239,62 @@ export default function WorkspaceSwitcher() {
                   })}
                 </div>
 
+                {/* Pending invitations addressed to the current user. */}
+                {inviteCount > 0 && (
+                  <>
+                    <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
+                    <div
+                      className="text-xs font-bold"
+                      style={{ color: "var(--text-3)", letterSpacing: "0.05em", padding: "2px 8px 6px" }}
+                    >
+                      INVITATIONS
+                    </div>
+                    {myInvitations.map((inv) => {
+                      const busy = busyInvite === inv.id;
+                      return (
+                        <div key={inv.id} className="rounded-md" style={{ padding: 8, background: "var(--surface-2)", marginBottom: 6 }}>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="flex flex-none items-center justify-center rounded-md text-xs font-bold text-white"
+                              style={{ width: 24, height: 24, background: "var(--primary)" }}
+                            >
+                              {(inv.workspace_name?.trim()?.[0] ?? "?").toUpperCase()}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold">
+                                {inv.workspace_name}
+                              </div>
+                              <div className="overflow-hidden text-ellipsis whitespace-nowrap text-xs" style={{ color: "var(--text-3)" }}>
+                                From {inv.invited_by_name || "a member"} · {inv.role}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-1.5" style={{ marginTop: 8 }}>
+                            <button
+                              type="button"
+                              onClick={() => handleAccept(inv.id)}
+                              disabled={busy}
+                              className="flex-1 rounded-md text-xs font-bold text-white cursor-pointer hover:bg-[var(--primary-2)] disabled:opacity-60"
+                              style={{ height: 30, border: "none", background: "var(--primary)" }}
+                            >
+                              {busy ? "…" : "Accept"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDecline(inv.id)}
+                              disabled={busy}
+                              className="flex-1 rounded-md text-xs font-bold cursor-pointer hover:bg-[var(--surface-3)] disabled:opacity-60"
+                              style={{ height: 30, border: "1px solid var(--border-2)", background: "var(--surface)", color: "var(--text-2)" }}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+
                 <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
 
                 <button
@@ -219,6 +322,7 @@ export default function WorkspaceSwitcher() {
       )}
 
       {showCreate && <CreateWorkspaceModal onClose={() => setShowCreate(false)} />}
+      {manageTab && <WorkspaceModal initialTab={manageTab} onClose={() => setManageTab(null)} />}
     </div>
   );
 }
