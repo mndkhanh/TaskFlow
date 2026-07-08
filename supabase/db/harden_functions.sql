@@ -621,3 +621,299 @@ create policy "Users can mark activities unread"
   on public.activity_reads for delete
   to authenticated
   using (user_id = auth.uid());
+
+-- ============================================================================
+-- Workspace invitations + membership-management RPCs (prd.md 3.1: "Ability to
+-- invite members to a Workspace via email").
+--
+-- Invitations use an explicit accept/decline flow: an owner creates a pending
+-- invite for an email address (whether or not that address has an account yet),
+-- and the invitee later accepts or declines it themselves — joining only on
+-- accept. Role changes, member removal, and leaving a workspace go through direct
+-- table writes gated by the workspace_members RLS above. This section adds the
+-- pieces those policies can't express, so it must stay after the private.* helpers:
+--
+--   * list_workspace_members  — read a workspace's members WITH their email
+--       (auth.users isn't readable by `authenticated`, so SECURITY DEFINER);
+--       gated to members of the workspace.
+--   * workspace_invitations   — pending email invites; an owner-managed table.
+--   * invite_to_workspace     — owner-only. Queue a pending invite for an email
+--       (unless that user is already a member).
+--   * list_my_invitations     — invites addressed to the caller (by email), with
+--       workspace + inviter info, so the invitee can see them before joining.
+--   * accept_invitation / decline_invitation — the invitee joins (or discards) an
+--       invite addressed to their own email.
+-- ============================================================================
+
+create table if not exists public.workspace_invitations (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  email text not null,
+  role public.workspace_role not null default 'member',
+  invited_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (workspace_id, email)
+);
+
+create index if not exists workspace_invitations_email_idx on public.workspace_invitations (email);
+
+alter table public.workspace_invitations enable row level security;
+
+-- Members can see a workspace's pending invites (to display/manage them); only
+-- owners may revoke (delete). Inserts happen exclusively through
+-- invite_to_workspace (SECURITY DEFINER), so no INSERT policy is granted here.
+drop policy if exists "Members can view invitations" on public.workspace_invitations;
+create policy "Members can view invitations"
+  on public.workspace_invitations for select
+  to authenticated
+  using (private.is_workspace_member(workspace_id));
+
+drop policy if exists "Owners can revoke invitations" on public.workspace_invitations;
+create policy "Owners can revoke invitations"
+  on public.workspace_invitations for delete
+  to authenticated
+  using (private.current_workspace_role(workspace_id) = 'owner');
+
+-- List members with their email + profile. SECURITY DEFINER so it can read
+-- auth.users; gated so only members of the workspace can call it for that workspace.
+create or replace function public.list_workspace_members(p_workspace_id uuid)
+returns table (
+  user_id uuid,
+  email text,
+  display_name text,
+  avatar_url text,
+  role public.workspace_role,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+stable
+set search_path to ''
+as $$
+begin
+  if not private.is_workspace_member(p_workspace_id) then
+    raise exception 'Not a member of this workspace' using errcode = '42501';
+  end if;
+
+  return query
+    select m.user_id,
+           u.email::text,
+           p.display_name,
+           p.avatar_url,
+           m.role,
+           m.created_at
+    from public.workspace_members m
+    join auth.users u on u.id = m.user_id
+    left join public.profiles p on p.id = m.user_id
+    where m.workspace_id = p_workspace_id
+    order by m.created_at asc;
+end;
+$$;
+
+-- Owner-only. Queue a pending invite for an email address (both existing users
+-- and not-yet-registered addresses). Returns a jsonb status: 'invited' |
+-- 'already_member'. The invitee joins only when they accept (accept_invitation).
+create or replace function public.invite_to_workspace(
+  p_workspace_id uuid,
+  p_email text,
+  p_role public.workspace_role default 'member'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_email text := lower(nullif(btrim(p_email), ''));
+  v_target uuid;
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated' using errcode = '42501';
+  end if;
+  if private.current_workspace_role(p_workspace_id) is distinct from 'owner' then
+    raise exception 'Only workspace owners can invite members' using errcode = '42501';
+  end if;
+  if v_email is null then
+    raise exception 'Email is required' using errcode = '23514';
+  end if;
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'Enter a valid email address' using errcode = '23514';
+  end if;
+
+  -- If that email already belongs to a workspace member, there's nothing to do.
+  select id into v_target from auth.users where lower(email) = v_email limit 1;
+  if v_target is not null and exists (
+    select 1 from public.workspace_members
+    where workspace_id = p_workspace_id and user_id = v_target
+  ) then
+    return jsonb_build_object('status', 'already_member');
+  end if;
+
+  insert into public.workspace_invitations (workspace_id, email, role, invited_by)
+  values (p_workspace_id, v_email, p_role, v_uid)
+  on conflict (workspace_id, email)
+  do update set role = excluded.role, invited_by = excluded.invited_by, created_at = now();
+
+  return jsonb_build_object('status', 'invited');
+end;
+$$;
+
+-- Invitations addressed to the current user (matched by their auth.users email),
+-- with workspace + inviter display info. SECURITY DEFINER because the invitee is
+-- not yet a member and so can't read the workspace (or its invites) via RLS.
+create or replace function public.list_my_invitations()
+returns table (
+  id uuid,
+  workspace_id uuid,
+  workspace_name text,
+  role public.workspace_role,
+  invited_by_name text,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+stable
+set search_path to ''
+as $$
+declare
+  v_email text;
+begin
+  -- Alias auth.users so the `id` reference is qualified: this function's
+  -- RETURNS TABLE column `id` is an in-scope variable, so a bare `id` here is
+  -- ambiguous ("column reference id is ambiguous").
+  select lower(au.email) into v_email from auth.users au where au.id = auth.uid();
+  if v_email is null then
+    return;
+  end if;
+
+  return query
+    select i.id,
+           i.workspace_id,
+           w.name,
+           i.role,
+           coalesce(p.display_name, u.email::text),
+           i.created_at
+    from public.workspace_invitations i
+    join public.workspaces w on w.id = i.workspace_id
+    left join auth.users u on u.id = i.invited_by
+    left join public.profiles p on p.id = i.invited_by
+    where i.email = v_email
+    order by i.created_at desc;
+end;
+$$;
+
+-- Accept an invitation addressed to the current user: join the workspace, then
+-- delete the invite. Returns the joined workspace id (null if it no longer exists).
+create or replace function public.accept_invitation(p_invitation_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_email text;
+  v_inv public.workspace_invitations;
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated' using errcode = '42501';
+  end if;
+  select lower(email) into v_email from auth.users where id = v_uid;
+
+  select * into v_inv from public.workspace_invitations where id = p_invitation_id;
+  if v_inv.id is null then
+    return null; -- already accepted/declined/revoked
+  end if;
+  if v_inv.email is distinct from v_email then
+    raise exception 'This invitation is not addressed to you' using errcode = '42501';
+  end if;
+
+  insert into public.workspace_members (workspace_id, user_id, role)
+  values (v_inv.workspace_id, v_uid, v_inv.role)
+  on conflict (workspace_id, user_id) do nothing;
+
+  delete from public.workspace_invitations where id = p_invitation_id;
+
+  return v_inv.workspace_id;
+end;
+$$;
+
+-- Decline (delete) an invitation addressed to the current user.
+create or replace function public.decline_invitation(p_invitation_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_email text;
+  v_inv_email text;
+begin
+  select lower(email) into v_email from auth.users where id = auth.uid();
+  select email into v_inv_email from public.workspace_invitations where id = p_invitation_id;
+  if v_inv_email is null then
+    return; -- already gone
+  end if;
+  if v_inv_email is distinct from v_email then
+    raise exception 'This invitation is not addressed to you' using errcode = '42501';
+  end if;
+  delete from public.workspace_invitations where id = p_invitation_id;
+end;
+$$;
+
+-- Reachable only by signed-in users, never the anon/public role.
+revoke execute on function public.list_workspace_members(uuid) from public, anon;
+grant execute on function public.list_workspace_members(uuid) to authenticated;
+
+revoke execute on function public.invite_to_workspace(uuid, text, public.workspace_role) from public, anon;
+grant execute on function public.invite_to_workspace(uuid, text, public.workspace_role) to authenticated;
+
+revoke execute on function public.list_my_invitations() from public, anon;
+grant execute on function public.list_my_invitations() to authenticated;
+
+revoke execute on function public.accept_invitation(uuid) from public, anon;
+grant execute on function public.accept_invitation(uuid) to authenticated;
+
+revoke execute on function public.decline_invitation(uuid) from public, anon;
+grant execute on function public.decline_invitation(uuid) to authenticated;
+
+-- ============================================================================
+-- User avatars (Storage).
+--
+-- profiles.avatar_url (initial_schema.sql) holds each user's avatar URL. This adds
+-- a PUBLIC bucket to host uploaded avatar images; the frontend writes the public
+-- URL into profiles.avatar_url (a user may update their own profile row per the
+-- rls_policies.sql "Users can update their own profile" policy).
+--
+-- Path convention: {user_id}/{uuid}.{ext} so (storage.foldername(name))[1] is the
+-- owner's uid — a user may only write under their own folder.
+-- ============================================================================
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Anyone can read avatars" on storage.objects;
+create policy "Anyone can read avatars"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'avatars');
+
+drop policy if exists "Users can upload their own avatar" on storage.objects;
+create policy "Users can upload their own avatar"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users can update their own avatar" on storage.objects;
+create policy "Users can update their own avatar"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users can delete their own avatar" on storage.objects;
+create policy "Users can delete their own avatar"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
