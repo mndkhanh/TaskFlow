@@ -68,11 +68,11 @@ export default function LoginPage() {
 
   return (
     <div
-      className="grid min-h-screen"
+      className="grid min-h-screen max-md:!grid-cols-1"
       style={{ gridTemplateColumns: "1.05fr 0.95fr" }}
     >
       <div
-        className="relative flex flex-col justify-between overflow-hidden text-white"
+        className="relative flex flex-col justify-between overflow-hidden text-white max-md:hidden"
         style={{
           padding: "56px 60px",
           background:
@@ -230,7 +230,7 @@ export default function LoginPage() {
       </div>
 
       <div
-        className="relative flex items-center justify-center"
+        className="relative flex items-center justify-center max-sm:!p-6"
         style={{ padding: 40, background: "var(--surface)" }}
       >
         <button

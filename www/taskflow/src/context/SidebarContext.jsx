@@ -9,7 +9,13 @@ const STORAGE_KEY = "tf.sidebarCollapsed";
 
 function readStored() {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "1";
+    const stored = localStorage.getItem(STORAGE_KEY);
+    // No stored preference yet: start collapsed on small screens so the sidebar
+    // (an overlay drawer there) doesn't cover the content on first load.
+    if (stored === null) {
+      return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+    }
+    return stored === "1";
   } catch {
     return false;
   }

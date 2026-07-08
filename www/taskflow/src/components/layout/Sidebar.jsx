@@ -8,17 +8,33 @@ import Icon from "../ui/Icon";
 
 export default function Sidebar() {
   const { boards, boardsLoading, unreadCount } = useBoardData();
-  const { collapsed } = useSidebar();
+  const { collapsed, setCollapsed } = useSidebar();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [showCreateBoard, setShowCreateBoard] = useState(false);
 
   if (collapsed) return null;
 
+  // On mobile the sidebar renders as an overlay drawer (see index.css), so a
+  // navigation should also dismiss it. On desktop the drawer is inline and the
+  // scrim is hidden, so closing here is harmless (the CSS media query decides).
+  const closeOnMobile = () => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      setCollapsed(true);
+    }
+  };
+
+  const go = (to) => {
+    navigate(to);
+    closeOnMobile();
+  };
+
   return (
-    <aside
-      className="flex flex-none flex-col"
-      style={{
+    <>
+      <div className="tf-drawer-scrim" onClick={() => setCollapsed(true)} />
+      <aside
+        className="tf-sidebar flex flex-none flex-col"
+        style={{
         width: 264,
         background: "var(--surface)",
         borderRight: "1px solid var(--border)",
@@ -33,7 +49,7 @@ export default function Sidebar() {
 
       <button
         type="button"
-        onClick={() => navigate("/inbox")}
+        onClick={() => go("/inbox")}
         className="flex w-full items-center gap-2.5 rounded-lg text-sm font-medium cursor-pointer hover:bg-[var(--surface-2)]"
         style={{
           padding: "9px 8px",
@@ -103,7 +119,7 @@ export default function Sidebar() {
               <button
                 key={board.id}
                 type="button"
-                onClick={() => navigate(`/board/${board.id}`)}
+                onClick={() => go(`/board/${board.id}`)}
                 className="flex w-full items-center gap-2.5 rounded-lg text-sm font-medium cursor-pointer hover:bg-[var(--surface-2)]"
                 style={{
                   padding: "9px 8px",
@@ -166,9 +182,10 @@ export default function Sidebar() {
         </span>
       </div>
 
-      {showCreateBoard && (
-        <CreateBoardModal onClose={() => setShowCreateBoard(false)} />
-      )}
-    </aside>
+        {showCreateBoard && (
+          <CreateBoardModal onClose={() => setShowCreateBoard(false)} />
+        )}
+      </aside>
+    </>
   );
 }

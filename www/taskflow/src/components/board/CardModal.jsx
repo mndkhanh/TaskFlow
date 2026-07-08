@@ -186,7 +186,7 @@ export default function CardModal({ card, listTitle, boardColor, onClose }) {
           </button>
         </div>
 
-        <div className="grid gap-6.5" style={{ gridTemplateColumns: "1fr 200px", padding: "24px 26px 28px" }}>
+        <div className="grid gap-6.5 max-sm:!grid-cols-1 max-sm:!gap-5 max-sm:!px-5" style={{ gridTemplateColumns: "1fr 200px", padding: "24px 26px 28px" }}>
           <div className="min-w-0">
             <div className="flex flex-wrap gap-6.5" style={{ marginBottom: 22 }}>
               <div>

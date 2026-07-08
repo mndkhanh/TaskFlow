@@ -90,7 +90,10 @@ The Supabase project is named **TaskFlow** (ref `eyrxpgfwjoucgfjqinro`, region a
     the Supabase SQL Editor, then `get_advisors` (security). Until it's applied, `admins`/`admin_dashboard`
     don't exist and admin-dashboard login lands on "access denied" (missing table) or the dashboard shows a
     load error (missing RPC).
-- `supabase/functions/` — placeholder for edge functions; empty so far.
+- `supabase/functions/` — edge functions. `send-invite-email/index.ts` sends a workspace-invitation
+  email; it's invoked (fire-and-forget, not awaited) from `inviteToWorkspace` in `BoardDataContext.jsx`
+  after the `invite_to_workspace` RPC queues the pending invite. See the invite-email edge-function setup
+  notes in the README.
 
 The workspace-membership section at the tail of `harden_functions.sql` (the `workspace_invitations` table
 + the `list_workspace_members` / `invite_to_workspace` / `list_my_invitations` / `accept_invitation` /

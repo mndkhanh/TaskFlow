@@ -106,7 +106,7 @@ export default function BoardHeader({ board, workspaceName, panelOpen, onToggleP
 
   return (
     <header
-      className="flex flex-none items-center gap-3.5"
+      className="flex flex-none items-center gap-3.5 max-md:gap-2 max-md:!px-3"
       style={{ height: 60, borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 20px" }}
     >
       <div className="flex min-w-0 flex-1 items-center" style={{ gap: 2 }}>
@@ -131,7 +131,7 @@ export default function BoardHeader({ board, workspaceName, panelOpen, onToggleP
           onSelect={handleBoardSelect}
         />
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center max-md:hidden">
         {Object.values(members).slice(0, 5).map((m) => (
           <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} src={m.avatarUrl} overlap />
         ))}
@@ -141,7 +141,7 @@ export default function BoardHeader({ board, workspaceName, panelOpen, onToggleP
         onClick={onTogglePanel}
         aria-pressed={panelOpen}
         title="Board panel (info, members, labels, filter)"
-        className="flex items-center gap-1.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)]"
+        className="flex items-center gap-1.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-[var(--surface-2)] max-sm:!px-2.5"
         style={{
           height: 36,
           padding: "0 12px",
@@ -151,7 +151,7 @@ export default function BoardHeader({ board, workspaceName, panelOpen, onToggleP
         }}
       >
         <Icon name="tune" size={18} />
-        Panel
+        <span className="max-sm:hidden">Panel</span>
         {filterCount > 0 && (
           <span
             className="flex items-center justify-center rounded-full text-white"

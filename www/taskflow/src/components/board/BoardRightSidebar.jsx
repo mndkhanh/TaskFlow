@@ -497,10 +497,12 @@ export default function BoardRightSidebar({
   const active = filterActiveCount(filter);
 
   return (
-    <aside
-      className="flex flex-none flex-col"
-      style={{ width: 316, borderLeft: "1px solid var(--border)", background: "var(--surface)" }}
-    >
+    <>
+      <div className="tf-drawer-scrim" onClick={onClose} />
+      <aside
+        className="tf-board-panel flex flex-none flex-col"
+        style={{ width: 316, borderLeft: "1px solid var(--border)", background: "var(--surface)" }}
+      >
       <div className="flex flex-none items-center gap-1" style={{ height: 48, padding: "0 6px 0 8px", borderBottom: "1px solid var(--border)" }}>
         {TABS.map((t) => {
           const on = tab === t.key;
@@ -545,6 +547,7 @@ export default function BoardRightSidebar({
           <FilterTab view={view} onViewChange={onViewChange} filter={filter} onFilterChange={onFilterChange} />
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

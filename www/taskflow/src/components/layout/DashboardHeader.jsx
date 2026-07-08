@@ -13,7 +13,7 @@ export default function DashboardHeader() {
 
   return (
     <header
-      className="flex flex-none items-center gap-4"
+      className="flex flex-none items-center gap-4 max-md:gap-2 max-md:!px-4"
       style={{ height: 64, borderBottom: "1px solid var(--border)", background: "var(--surface)", padding: "0 28px" }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -26,7 +26,7 @@ export default function DashboardHeader() {
       </div>
 
       <div
-        className="flex items-center gap-2 rounded-lg"
+        className="flex items-center gap-2 rounded-lg max-lg:hidden"
         style={{ height: 38, padding: "0 12px", border: "1px solid var(--border-2)", background: "var(--bg)", width: 240 }}
       >
         <Icon name="search" size={18} style={{ color: "var(--text-3)" }} />
@@ -37,7 +37,7 @@ export default function DashboardHeader() {
         />
       </div>
 
-      <div className="flex items-center">
+      <div className="flex items-center max-md:hidden">
         {memberList.slice(0, 5).map((m) => (
           <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} src={m.avatarUrl} overlap />
         ))}
@@ -45,11 +45,11 @@ export default function DashboardHeader() {
 
       <button
         type="button"
-        className="flex items-center gap-1.5 rounded-lg text-sm font-bold text-white cursor-pointer hover:bg-[var(--primary-2)]"
+        className="flex items-center gap-1.5 rounded-lg text-sm font-bold text-white cursor-pointer hover:bg-[var(--primary-2)] max-sm:!px-2.5"
         style={{ height: 38, padding: "0 14px", border: "none", background: "var(--primary)" }}
       >
         <Icon name="person_add" size={18} />
-        Invite
+        <span className="max-sm:hidden">Invite</span>
       </button>
 
       <IconButton icon={theme === "light" ? "dark_mode" : "light_mode"} size={38} onClick={toggleTheme} />

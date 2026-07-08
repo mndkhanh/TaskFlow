@@ -18,7 +18,13 @@ function readStoredView() {
 
 function readPanelOpen() {
   try {
-    return localStorage.getItem("tf.boardPanelOpen") !== "0";
+    const stored = localStorage.getItem("tf.boardPanelOpen");
+    // No stored preference: start closed on small screens, where the panel is an
+    // overlay drawer that would otherwise cover the board on first load.
+    if (stored === null) {
+      return !(typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
+    }
+    return stored !== "0";
   } catch {
     return true;
   }

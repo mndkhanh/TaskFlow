@@ -138,3 +138,44 @@ button {
     opacity: 1;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Responsive: the left Sidebar and right BoardRightSidebar are fixed-width
+   columns on desktop. Below the `md` breakpoint (768px) they become overlay
+   drawers that slide over the content with a tap-to-close scrim, so the board
+   itself keeps the full viewport width. The `!important` rules intentionally
+   override the components' inline width/position styles only on small screens.
+--------------------------------------------------------------------------- */
+.tf-drawer-scrim {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .tf-sidebar,
+  .tf-board-panel {
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    z-index: 41;
+    max-width: 88vw;
+    box-shadow: var(--shadow-lg);
+    animation: tf-fade 0.16s ease;
+  }
+
+  .tf-sidebar {
+    left: 0;
+  }
+
+  .tf-board-panel {
+    right: 0;
+  }
+
+  .tf-drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(10, 15, 25, 0.45);
+    animation: tf-fade 0.12s ease;
+  }
+}

@@ -26,7 +26,7 @@ export default function DashboardPage() {
       <Sidebar />
       <main className="flex min-w-0 flex-1 flex-col">
         <DashboardHeader />
-        <div className="flex-1 overflow-y-auto" style={{ padding: "32px 28px" }}>
+        <div className="flex-1 overflow-y-auto max-md:!p-4" style={{ padding: "32px 28px" }}>
           <div style={{ maxWidth: 1100, margin: "0 auto" }}>
             {(workspacesError || boardsError) && (
               <div
