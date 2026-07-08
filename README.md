@@ -13,6 +13,11 @@ its own) plus the database schema:
 - `www/admin-dashboard` — an admin-gated console with instance-wide stats and activity.
 - `supabase/db` — the canonical hand-maintained SQL schema.
 
+## Demo
+
+- YouTube walkthrough: https://youtu.be/qsvyHDZu6YQ
+- Live deployment: https://srttaskflow.pages.dev/
+
 ## How to set up locally and deploy your own copy
 
 ### 1. Fork the GitHub repo
@@ -99,8 +104,3 @@ insert into public.admins (user_id)
 select id from auth.users where email = 'YOUR_EXPECTED_ADMIN_EMAIL'
 on conflict (user_id) do nothing;
 ```
-
-## Demo
-
-- YouTube walkthrough: _coming soon_
-- Live deployment: https://srttaskflow.pages.dev/
