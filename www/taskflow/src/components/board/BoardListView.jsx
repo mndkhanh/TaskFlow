@@ -84,7 +84,7 @@ function CardRow({ card, listId, isDragging, dropBefore, onDragStart, onDragOver
           <span className="flex flex-none">
             {card.assignees.map((id) =>
               members[id] ? (
-                <Avatar key={id} initials={members[id].initials} color={members[id].color} size={24} overlap />
+                <Avatar key={id} initials={members[id].initials} color={members[id].color} src={members[id].avatarUrl} size={24} overlap />
               ) : null
             )}
           </span>

@@ -84,7 +84,7 @@ export default function BoardCard({ card, listId, isDragging, dropBefore, onDrag
               <span className="flex">
                 {card.assignees.map((id) =>
                   members[id] ? (
-                    <Avatar key={id} initials={members[id].initials} color={members[id].color} size={24} overlap />
+                    <Avatar key={id} initials={members[id].initials} color={members[id].color} src={members[id].avatarUrl} size={24} overlap />
                   ) : null
                 )}
               </span>

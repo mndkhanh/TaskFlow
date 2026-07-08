@@ -156,7 +156,7 @@ export default function InboxPage() {
                       }}
                     >
                       <div className="relative flex-none" style={{ marginTop: 1 }}>
-                        <Avatar initials={actor?.initials || "?"} color={actor?.color || "var(--text-3)"} size={34} />
+                        <Avatar initials={actor?.initials || "?"} color={actor?.color || "var(--text-3)"} src={actor?.avatarUrl} size={34} />
                         <span
                           className="absolute flex items-center justify-center rounded-full"
                           style={{ right: -3, bottom: -3, width: 18, height: 18, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-3)" }}

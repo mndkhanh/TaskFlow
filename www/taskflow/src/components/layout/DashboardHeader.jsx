@@ -39,7 +39,7 @@ export default function DashboardHeader() {
 
       <div className="flex items-center">
         {memberList.slice(0, 5).map((m) => (
-          <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} overlap />
+          <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} src={m.avatarUrl} overlap />
         ))}
       </div>
 

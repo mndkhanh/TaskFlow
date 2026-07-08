@@ -222,7 +222,7 @@ function MembersTab() {
     <div className="flex flex-col gap-1">
       {list.map((m) => (
         <div key={m.id} className="flex items-center gap-2.5 rounded-lg" style={{ padding: "7px 8px" }}>
-          <Avatar initials={m.initials} color={m.color} size={30} />
+          <Avatar initials={m.initials} color={m.color} src={m.avatarUrl} size={30} />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold" style={{ color: "var(--text)" }}>{m.name}</span>
         </div>
       ))}
@@ -436,7 +436,7 @@ function FilterTab({ view, onViewChange, filter, onFilterChange }) {
                     background: on ? "var(--primary-soft)" : "var(--surface)",
                   }}
                 >
-                  <Avatar initials={m.initials} color={m.color} size={22} />
+                  <Avatar initials={m.initials} color={m.color} src={m.avatarUrl} size={22} />
                   <span className="text-xs font-semibold" style={{ color: on ? "var(--primary)" : "var(--text-2)" }}>{m.name}</span>
                 </button>
               );

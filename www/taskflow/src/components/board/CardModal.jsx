@@ -194,7 +194,7 @@ export default function CardModal({ card, listTitle, boardColor, onClose }) {
                 <div className="flex gap-1.5">
                   {card.assignees.map((id) =>
                     members[id] ? (
-                      <Avatar key={id} title={members[id].name} initials={members[id].initials} color={members[id].color} size={34} />
+                      <Avatar key={id} title={members[id].name} initials={members[id].initials} color={members[id].color} src={members[id].avatarUrl} size={34} />
                     ) : null
                   )}
                   <button
@@ -434,7 +434,7 @@ export default function CardModal({ card, listTitle, boardColor, onClose }) {
                 <span className="text-sm font-bold">Activity</span>
               </div>
               <div className="flex gap-2.5" style={{ marginBottom: 18 }}>
-                <Avatar initials={members[myId]?.initials ?? "?"} color={members[myId]?.color ?? "var(--primary)"} />
+                <Avatar initials={members[myId]?.initials ?? "?"} color={members[myId]?.color ?? "var(--primary)"} src={members[myId]?.avatarUrl} />
                 <div className="flex-1">
                   <textarea
                     value={commentDraft}
@@ -465,7 +465,7 @@ export default function CardModal({ card, listTitle, boardColor, onClose }) {
                 const author = members[c.userId];
                 return (
                   <div key={c.id} className="group flex gap-2.5" style={{ marginBottom: 16 }}>
-                    <Avatar initials={author?.initials ?? "?"} color={author?.color ?? "var(--text-3)"} />
+                    <Avatar initials={author?.initials ?? "?"} color={author?.color ?? "var(--text-3)"} src={author?.avatarUrl} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2" style={{ marginBottom: 4 }}>
                         <span className="text-sm font-bold">{author?.name ?? "Member"}</span>
@@ -514,7 +514,7 @@ export default function CardModal({ card, listTitle, boardColor, onClose }) {
                         className="flex w-full items-center gap-2.5 rounded-lg cursor-pointer hover:bg-[var(--surface-2)]"
                         style={{ padding: "6px 8px", border: "none", background: "none", color: "var(--text)" }}
                       >
-                        <Avatar initials={m.initials} color={m.color} size={28} />
+                        <Avatar initials={m.initials} color={m.color} src={m.avatarUrl} size={28} />
                         <span className="flex-1 text-left text-sm font-semibold truncate">{m.name}</span>
                         {on && <Icon name="check" size={18} style={{ color: "var(--primary)" }} />}
                       </button>

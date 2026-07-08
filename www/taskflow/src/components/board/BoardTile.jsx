@@ -40,7 +40,7 @@ export default function BoardTile({ board }) {
           <div className="flex">
             {board.avatars.map((id) =>
               members[id] ? (
-                <Avatar key={id} initials={members[id].initials} color={members[id].color} size={26} overlap />
+                <Avatar key={id} initials={members[id].initials} color={members[id].color} src={members[id].avatarUrl} size={26} overlap />
               ) : null
             )}
           </div>

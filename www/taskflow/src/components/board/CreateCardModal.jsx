@@ -128,7 +128,7 @@ export default function CreateCardModal({ listId, listTitle, boardColor, onClose
                       className="rounded-full cursor-pointer"
                       style={{ border: on ? "2px solid var(--primary)" : "2px solid transparent", borderRadius: 999, opacity: on ? 1 : 0.55, lineHeight: 0 }}
                     >
-                      <Avatar initials={m.initials} color={m.color} size={30} />
+                      <Avatar initials={m.initials} color={m.color} src={m.avatarUrl} size={30} />
                     </button>
                   );
                 })}
