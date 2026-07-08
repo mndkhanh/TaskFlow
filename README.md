@@ -31,21 +31,11 @@ Fork it to your account and clone your fork.
 
 Under **Authentication → Providers**, enable **Email/Password** (Google OAuth is optional).
 
-#### 2.2 Set up the invite-email edge function _(optional)_
+#### 2.2 Set up edge function
 
-Workspace invitations always work without this step — an invite is queued in the database and the
-recipient accepts it in-app. This edge function just adds a courtesy **notification email** on top,
-sent in the background (the invite flow never blocks or fails on it). Set it up if you want invitees
-emailed; skip it otherwise.
+1. **Create a Gmail App Password.**
 
-The `send-invite-email` edge function (`supabase/functions/send-invite-email`) delivers the mail over
-Gmail SMTP. Configure it with the [Supabase CLI](https://supabase.com/docs/guides/cli):
-
-1. **Create a Gmail App Password.** On the sending Google account, enable 2-Step Verification, then
-   generate an App Password (Google Account → Security → App passwords). This 16-character value is
-   used instead of the account password. **Never commit it** — it lives only in Supabase secrets.
-
-2. **Set the function secrets** (replace the placeholders with your values and project ref):
+2. **Set the function secrets**:
 
    ```bash
    supabase secrets set \
@@ -59,10 +49,6 @@ Gmail SMTP. Configure it with the [Supabase CLI](https://supabase.com/docs/guide
    ```bash
    supabase functions deploy send-invite-email --project-ref <your-project-ref>
    ```
-
-The app invokes it in the background after an owner invites someone; the function re-verifies (via the
-caller's token) that they own the workspace before sending, so it can't be used as an open relay. If
-the email can't be delivered the invitation is still queued for the recipient to accept in-app.
 
 ### 3. Deploy the React apps to Cloudflare Pages
 
