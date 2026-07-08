@@ -110,8 +110,13 @@ function mapWorkspaces(rows, userId) {
     .map(({ ws, memberCount, myRole }, i) => ({
       id: ws.id,
       name: ws.name,
+      description: ws.description ?? "",
       initial: (ws.name?.trim()?.[0] ?? "?").toUpperCase(),
       color: WORKSPACE_COLORS[i % WORKSPACE_COLORS.length],
+      // Raw role of the current user (used to gate owner-only actions) plus a
+      // human-readable summary line for the sidebar.
+      myRole: myRole ?? "member",
+      memberCount,
       role: `${capitalize(myRole ?? "member")} · ${memberCount} member${memberCount === 1 ? "" : "s"}`,
     }));
 }
@@ -266,7 +271,7 @@ export function BoardDataProvider({ children }) {
   const fetchWorkspaces = useCallback(async () => {
     const { data, error } = await supabase
       .from("workspace_members")
-      .select("user_id, role, workspaces(id, name, created_at)");
+      .select("user_id, role, workspaces(id, name, description, created_at)");
     if (error) return { error };
     return { workspaces: mapWorkspaces(data ?? [], userId) };
   }, [userId]);
@@ -282,6 +287,18 @@ export function BoardDataProvider({ children }) {
       return mapped[0]?.id ?? null;
     });
   }, []);
+
+  // Re-fetch the workspace list and reconcile the active selection. Used after
+  // membership changes (invite/leave/remove/role) and workspace rename/delete so
+  // the sidebar's names/counts stay in sync.
+  const refreshWorkspaces = useCallback(
+    async (preferId = null) => {
+      const res = await fetchWorkspaces();
+      if (!res.error) applyWorkspaces(res.workspaces, preferId);
+      return res;
+    },
+    [fetchWorkspaces, applyWorkspaces]
+  );
 
   useEffect(() => {
     if (!userId) {
@@ -368,6 +385,288 @@ export function BoardDataProvider({ children }) {
       cancelled = true;
     };
   }, [activeWorkspaceId, fetchMembers]);
+
+  // Re-pull the active workspace's members map (for assignee pickers / author
+  // display) after a membership change.
+  const refreshMembers = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    const res = await fetchMembers(activeWorkspaceId);
+    if (!res.error) setMembers(res.members);
+  }, [activeWorkspaceId, fetchMembers]);
+
+  // --- Current user's profile (display name + avatar) ---------------------------
+
+  const [myProfile, setMyProfile] = useState(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setMyProfile(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url")
+      .eq("id", userId)
+      .single()
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setMyProfile({ id: data.id, displayName: data.display_name, avatarUrl: data.avatar_url });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const patchMyProfile = useCallback((patch) => {
+    setMyProfile((p) => (p ? { ...p, ...patch } : p));
+  }, []);
+
+  // Upload a new avatar to the public `avatars` bucket under {user_id}/{uuid}.{ext}
+  // (storage RLS lets a user write only their own folder), then point
+  // profiles.avatar_url at its public URL and refresh the members map so it shows
+  // everywhere immediately.
+  const uploadAvatar = useCallback(
+    async (file) => {
+      if (!userId) return { error: { message: "Not signed in." } };
+      const ext = (file.name.split(".").pop() || "img").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+      const up = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: false, contentType: file.type || undefined });
+      if (up.error) return { error: up.error };
+
+      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+      const url = pub.publicUrl;
+      const { error } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", userId);
+      if (error) {
+        await supabase.storage.from("avatars").remove([path]); // best-effort cleanup
+        return { error };
+      }
+      patchMyProfile({ avatarUrl: url });
+      await refreshMembers();
+      return { data: { url } };
+    },
+    [userId, patchMyProfile, refreshMembers]
+  );
+
+  const setAvatarByUrl = useCallback(
+    async (url) => {
+      const trimmed = (url || "").trim();
+      if (!/^https?:\/\//i.test(trimmed)) return { error: { message: "URL must start with http:// or https://" } };
+      const { error } = await supabase.from("profiles").update({ avatar_url: trimmed }).eq("id", userId);
+      if (error) return { error };
+      patchMyProfile({ avatarUrl: trimmed });
+      await refreshMembers();
+      return { data: { url: trimmed } };
+    },
+    [userId, patchMyProfile, refreshMembers]
+  );
+
+  const removeAvatar = useCallback(async () => {
+    const { error } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", userId);
+    if (error) return { error };
+    patchMyProfile({ avatarUrl: null });
+    await refreshMembers();
+    return {};
+  }, [userId, patchMyProfile, refreshMembers]);
+
+  const updateDisplayName = useCallback(
+    async (name) => {
+      const t = (name || "").trim();
+      if (!t) return { error: { message: "Name is required." } };
+      const { error } = await supabase.from("profiles").update({ display_name: t }).eq("id", userId);
+      if (error) return { error };
+      patchMyProfile({ displayName: t });
+      await refreshMembers();
+      return {};
+    },
+    [userId, patchMyProfile, refreshMembers]
+  );
+
+  // --- Member management + invitations ------------------------------------------
+
+  // Full member list (with email + role) for the manage-members UI. Goes through a
+  // SECURITY DEFINER RPC because emails live in auth.users, which authenticated
+  // users can't read directly.
+  const listWorkspaceMembers = useCallback(async (workspaceId) => {
+    const { data, error } = await supabase.rpc("list_workspace_members", { p_workspace_id: workspaceId });
+    if (error) return { error };
+    return { members: data ?? [] };
+  }, []);
+
+  // Pending email invites for a workspace (RLS scopes visibility to its members).
+  const listWorkspaceInvitations = useCallback(async (workspaceId) => {
+    const { data, error } = await supabase
+      .from("workspace_invitations")
+      .select("id, email, role, created_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+    if (error) return { error };
+    return { invitations: data ?? [] };
+  }, []);
+
+  // Owner-only invite by email. Queues a pending invite the recipient accepts
+  // later. Returns { status }: 'invited' or 'already_member'.
+  const inviteToWorkspace = useCallback(async (workspaceId, email, role = "member") => {
+    const { data, error } = await supabase.rpc("invite_to_workspace", {
+      p_workspace_id: workspaceId,
+      p_email: email,
+      p_role: role,
+    });
+    if (error) return { error };
+    return { status: data?.status ?? "invited" };
+  }, []);
+
+  // Owner-only: change a member's role (RLS enforces owner).
+  const updateMemberRole = useCallback(
+    async (workspaceId, memberId, role) => {
+      const { error } = await supabase
+        .from("workspace_members")
+        .update({ role })
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", memberId);
+      if (error) return { error };
+      await refreshWorkspaces();
+      return {};
+    },
+    [refreshWorkspaces]
+  );
+
+  // Owner-only: remove a member (RLS enforces owner; a member removing themselves
+  // is the "leave" path below).
+  const removeMember = useCallback(
+    async (workspaceId, memberId) => {
+      const { error } = await supabase
+        .from("workspace_members")
+        .delete()
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", memberId);
+      if (error) return { error };
+      await refreshWorkspaces();
+      await refreshMembers();
+      return {};
+    },
+    [refreshWorkspaces, refreshMembers]
+  );
+
+  // Owner-only: revoke a pending invitation (RLS enforces owner).
+  const revokeInvitation = useCallback(async (invitationId) => {
+    const { error } = await supabase.from("workspace_invitations").delete().eq("id", invitationId);
+    return { error };
+  }, []);
+
+  // Leave a workspace by deleting your own membership row (RLS allows self-delete).
+  const leaveWorkspace = useCallback(
+    async (workspaceId) => {
+      if (!userId) return { error: { message: "Not signed in." } };
+      const { error } = await supabase
+        .from("workspace_members")
+        .delete()
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", userId);
+      if (error) return { error };
+      await refreshWorkspaces();
+      return {};
+    },
+    [userId, refreshWorkspaces]
+  );
+
+  // Owner-only: rename / re-describe a workspace (optimistic on the sidebar name),
+  // then persist; refetch to reconcile on failure.
+  const renameWorkspace = useCallback(
+    async (workspaceId, { name, description }) => {
+      const patch = {};
+      if (name !== undefined) patch.name = name.trim();
+      if (description !== undefined) patch.description = description?.trim() ? description.trim() : null;
+      if ("name" in patch && !patch.name) return { error: { message: "Workspace name is required." } };
+      setWorkspaces((prev) =>
+        prev.map((w) => {
+          if (w.id !== workspaceId) return w;
+          const nextName = "name" in patch ? patch.name : w.name;
+          return {
+            ...w,
+            name: nextName,
+            description: "description" in patch ? patch.description ?? "" : w.description,
+            initial: (nextName?.trim()?.[0] ?? "?").toUpperCase(),
+          };
+        })
+      );
+      const { error } = await supabase.from("workspaces").update(patch).eq("id", workspaceId);
+      if (error) await refreshWorkspaces();
+      return { error };
+    },
+    [refreshWorkspaces]
+  );
+
+  // Owner-only: delete a workspace (DB cascades boards/lists/cards/etc.), then
+  // reconcile the list + active selection.
+  const deleteWorkspace = useCallback(
+    async (workspaceId) => {
+      const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
+      if (error) return { error };
+      await refreshWorkspaces();
+      return {};
+    },
+    [refreshWorkspaces]
+  );
+
+  // --- Invitations addressed to the current user (accept / decline) -------------
+
+  const [myInvitations, setMyInvitations] = useState([]);
+
+  const fetchMyInvitations = useCallback(async () => {
+    const { data, error } = await supabase.rpc("list_my_invitations");
+    if (error) return { error };
+    return { invitations: data ?? [] };
+  }, []);
+
+  const refreshMyInvitations = useCallback(async () => {
+    if (!userId) {
+      setMyInvitations([]);
+      return;
+    }
+    const res = await fetchMyInvitations();
+    if (!res.error) setMyInvitations(res.invitations);
+  }, [userId, fetchMyInvitations]);
+
+  useEffect(() => {
+    if (!userId) {
+      setMyInvitations([]);
+      return;
+    }
+    let cancelled = false;
+    fetchMyInvitations().then((res) => {
+      if (cancelled || res.error) return;
+      setMyInvitations(res.invitations);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, fetchMyInvitations]);
+
+  // Accept an invitation: join the workspace and switch to it, then refresh the
+  // sidebar + the pending-invitation list.
+  const acceptInvitation = useCallback(
+    async (invitationId) => {
+      const { data, error } = await supabase.rpc("accept_invitation", { p_invitation_id: invitationId });
+      if (error) return { error };
+      await refreshMyInvitations();
+      await refreshWorkspaces(data ?? null); // data = joined workspace id -> becomes active
+      return { workspaceId: data ?? null };
+    },
+    [refreshMyInvitations, refreshWorkspaces]
+  );
+
+  const declineInvitation = useCallback(
+    async (invitationId) => {
+      const { error } = await supabase.rpc("decline_invitation", { p_invitation_id: invitationId });
+      if (error) return { error };
+      await refreshMyInvitations();
+      return {};
+    },
+    [refreshMyInvitations]
+  );
 
   const [boards, setBoards] = useState([]);
   const [boardsLoading, setBoardsLoading] = useState(false);
@@ -1126,6 +1425,76 @@ export function BoardDataProvider({ children }) {
       });
   }, [activities, userId]);
 
+  // --- Realtime -----------------------------------------------------------------
+
+  // Keep the open board's lists/cards in sync across clients. Supabase Realtime
+  // respects RLS, so a member only receives changes for boards they can see. We
+  // debounce a full board refetch rather than surgically applying each event —
+  // simpler and it never fights the optimistic local state (or echoes of our own
+  // writes). Requires lists + cards to be in the `supabase_realtime` publication.
+  useEffect(() => {
+    if (!activeBoardId) return;
+    let timer = null;
+    const scheduleRefetch = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const res = await fetchLists(activeBoardId);
+        if (!res.error) setLists(res.lists);
+      }, 250);
+    };
+    const channel = supabase
+      .channel(`board:${activeBoardId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "lists", filter: `board_id=eq.${activeBoardId}` },
+        scheduleRefetch
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "cards" }, (payload) => {
+        // cards carry no board_id, so relate via list_id. On DELETE, payload.old
+        // may only hold the PK (list_id absent) — refetch when we can't tell.
+        const ids = new Set(listsRef.current.map((l) => l.id));
+        const newId = payload.new?.list_id;
+        const oldId = payload.old?.list_id;
+        if ((newId === undefined && oldId === undefined) || ids.has(newId) || ids.has(oldId)) scheduleRefetch();
+      })
+      .subscribe();
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [activeBoardId, fetchLists]);
+
+  // Push new Inbox activity from other members into the feed as it happens.
+  // Requires activities to be in the `supabase_realtime` publication.
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+    let timer = null;
+    const scheduleRefresh = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => refreshActivities(), 250);
+    };
+    const channel = supabase
+      .channel(`ws-activities:${activeWorkspaceId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "activities", filter: `workspace_id=eq.${activeWorkspaceId}` },
+        scheduleRefresh
+      )
+      .subscribe();
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [activeWorkspaceId, refreshActivities]);
+
+  // The active workspace object + the current user's raw role in it (for gating
+  // owner-only member/settings actions in the UI).
+  const activeWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId) ?? null,
+    [workspaces, activeWorkspaceId]
+  );
+  const activeRole = activeWorkspace?.myRole ?? null;
+
   // Labels map (keyed by id) the cards/modal resolve label ids against.
   const labels = useMemo(() => {
     const m = {};
@@ -1141,8 +1510,29 @@ export function BoardDataProvider({ children }) {
     workspacesLoading,
     workspacesError,
     activeWorkspaceId,
+    activeWorkspace,
+    activeRole,
     selectWorkspace: setActiveWorkspaceId,
     createWorkspace,
+    refreshWorkspaces,
+    listWorkspaceMembers,
+    listWorkspaceInvitations,
+    inviteToWorkspace,
+    updateMemberRole,
+    removeMember,
+    revokeInvitation,
+    leaveWorkspace,
+    renameWorkspace,
+    deleteWorkspace,
+    myInvitations,
+    refreshMyInvitations,
+    acceptInvitation,
+    declineInvitation,
+    myProfile,
+    uploadAvatar,
+    setAvatarByUrl,
+    removeAvatar,
+    updateDisplayName,
     boards,
     boardsLoading,
     boardsError,
