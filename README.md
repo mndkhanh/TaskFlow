@@ -21,7 +21,7 @@ Fork it to your account and clone your fork.
 
 ### 2. Set up Supabase
 
-Create a Supabase project, then in the **SQL Editor** apply the files in `supabase/db/` in order:
+#### 2.1 Create a Supabase project, then in the **SQL Editor** apply the files in `supabase/db/` in order:
 
 1. `initial_schema.sql` — tables
 2. `functions_triggers.sql` — signup provisioning + `updated_at` triggers
@@ -31,15 +31,48 @@ Create a Supabase project, then in the **SQL Editor** apply the files in `supaba
 
 Under **Authentication → Providers**, enable **Email/Password** (Google OAuth is optional).
 
+#### 2.2 Set up the invite-email edge function _(optional)_
+
+Workspace invitations always work without this step — an invite is queued in the database and the
+recipient accepts it in-app. This edge function just adds a courtesy **notification email** on top,
+sent in the background (the invite flow never blocks or fails on it). Set it up if you want invitees
+emailed; skip it otherwise.
+
+The `send-invite-email` edge function (`supabase/functions/send-invite-email`) delivers the mail over
+Gmail SMTP. Configure it with the [Supabase CLI](https://supabase.com/docs/guides/cli):
+
+1. **Create a Gmail App Password.** On the sending Google account, enable 2-Step Verification, then
+   generate an App Password (Google Account → Security → App passwords). This 16-character value is
+   used instead of the account password. **Never commit it** — it lives only in Supabase secrets.
+
+2. **Set the function secrets** (replace the placeholders with your values and project ref):
+
+   ```bash
+   supabase secrets set \
+     GMAIL_USER=your-gmail@gmail.com \
+     GMAIL_APP_PASSWORD=your16charapppass \
+     --project-ref <your-project-ref>
+   ```
+
+3. **Deploy the function** (keep JWT verification on — the app passes the signed-in user's token):
+
+   ```bash
+   supabase functions deploy send-invite-email --project-ref <your-project-ref>
+   ```
+
+The app invokes it in the background after an owner invites someone; the function re-verifies (via the
+caller's token) that they own the workspace before sending, so it can't be used as an open relay. If
+the email can't be delivered the invitation is still queued for the recipient to accept in-app.
+
 ### 3. Deploy the React apps to Cloudflare Pages
 
 Create a Cloudflare Pages project for each app (they deploy separately):
 
-| Setting | `www/taskflow` | `www/admin-dashboard` |
-| --- | --- | --- |
-| Root directory | `www/taskflow` | `www/admin-dashboard` |
-| Build command | `npm run build` | `npm run build` |
-| Output directory | `dist` | `dist` |
+| Setting          | `www/taskflow`  | `www/admin-dashboard` |
+| ---------------- | --------------- | --------------------- |
+| Root directory   | `www/taskflow`  | `www/admin-dashboard` |
+| Build command    | `npm run build` | `npm run build`       |
+| Output directory | `dist`          | `dist`                |
 
 In each project's settings, add the environment variables (note the **`VITE_` prefix** — Vite only
 exposes vars with it):
