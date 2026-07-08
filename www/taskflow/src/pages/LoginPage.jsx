@@ -12,7 +12,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const { isAuthenticated, signInWithPassword, signUpWithPassword, signInWithGoogle } = useAuth();
+  const {
+    isAuthenticated,
+    signInWithPassword,
+    signUpWithPassword,
+    signInWithGoogle,
+  } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -31,10 +36,14 @@ export default function LoginPage() {
     setSubmitting(true);
 
     if (isSignup) {
-      const { error: signUpError, needsEmailConfirmation } = await signUpWithPassword(email, password, fullName);
+      const { error: signUpError, needsEmailConfirmation } =
+        await signUpWithPassword(email, password, fullName);
       setSubmitting(false);
       if (signUpError) return setError(signUpError.message);
-      if (needsEmailConfirmation) return setInfo("Check your email to confirm your account, then log in.");
+      if (needsEmailConfirmation)
+        return setInfo(
+          "Check your email to confirm your account, then log in.",
+        );
       navigate("/dashboard");
       return;
     }
@@ -455,13 +464,6 @@ export default function LoginPage() {
             </span>
             Continue with Google
           </button>
-
-          <p
-            className="text-center text-sm"
-            style={{ color: "var(--text-3)", margin: "22px 0 0" }}
-          >
-            Protected by workspace-level RBAC &amp; row-level security.
-          </p>
         </div>
       </div>
     </div>
