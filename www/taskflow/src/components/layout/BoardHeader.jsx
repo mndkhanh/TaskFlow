@@ -131,6 +131,11 @@ export default function BoardHeader({ board, workspaceName, panelOpen, onToggleP
           onSelect={handleBoardSelect}
         />
       </div>
+      <div className="flex items-center">
+        {Object.values(members).slice(0, 5).map((m) => (
+          <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} src={m.avatarUrl} overlap />
+        ))}
+      </div>
       <button
         type="button"
         onClick={onTogglePanel}
@@ -155,19 +160,6 @@ export default function BoardHeader({ board, workspaceName, panelOpen, onToggleP
             {filterCount}
           </span>
         )}
-      </button>
-      <div className="flex items-center">
-        {Object.values(members).slice(0, 5).map((m) => (
-          <Avatar key={m.id} title={m.name} initials={m.initials} color={m.color} overlap />
-        ))}
-      </div>
-      <button
-        type="button"
-        className="flex items-center gap-1.5 rounded-lg text-sm font-bold text-white cursor-pointer hover:bg-[var(--primary-2)]"
-        style={{ height: 36, padding: "0 14px", border: "none", background: "var(--primary)" }}
-      >
-        <Icon name="ios_share" size={18} />
-        Share
       </button>
       <IconButton icon={theme === "light" ? "dark_mode" : "light_mode"} size={36} onClick={toggleTheme} />
     </header>
