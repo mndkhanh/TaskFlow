@@ -96,24 +96,11 @@ function MembersTab({ workspace, isOwner, members, invites, loading, error, relo
     if (!value) return;
     setInviteBusy(true);
     setInviteMsg(null);
-    const { status, error: inviteError, emailSent, emailError } = await inviteToWorkspace(
-      workspace.id,
-      value,
-      inviteRole
-    );
+    const { status, error: inviteError } = await inviteToWorkspace(workspace.id, value, inviteRole);
     setInviteBusy(false);
     if (inviteError) return setInviteMsg({ tone: "danger", text: inviteError.message });
     if (status === "already_member") return setInviteMsg({ tone: "info", text: `${value} is already a member.` });
-    if (emailSent) {
-      setInviteMsg({ tone: "success", text: `Invitation emailed to ${value}. They can accept it from their account.` });
-    } else {
-      // The invite is queued regardless; the email just couldn't be delivered.
-      setInviteMsg({
-        tone: "info",
-        text: `${value} was invited and can accept it from their account.`
-          + (emailError ? ` (Email not sent: ${emailError})` : ""),
-      });
-    }
+    setInviteMsg({ tone: "success", text: `Invitation sent to ${value}. They can accept it from their account.` });
     setEmail("");
     await reload();
   };

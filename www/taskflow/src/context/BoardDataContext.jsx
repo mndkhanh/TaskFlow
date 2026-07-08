@@ -507,10 +507,11 @@ export function BoardDataProvider({ children }) {
   }, []);
 
   // Owner-only invite by email. Queues a pending invite the recipient accepts
-  // later, then best-effort sends them a notification email via the
-  // `send-invite-email` edge function (the queued invite is the source of
-  // truth; a failed email doesn't fail the invite). Returns { status }
-  // ('invited' | 'already_member') plus { emailSent, emailError } on 'invited'.
+  // later, then fires the notification email in the background via the
+  // `send-invite-email` edge function. The email is intentionally NOT awaited:
+  // the edge-function cold start + Gmail SMTP handshake take a few seconds, and
+  // the queued invite is the source of truth, so blocking the UI on it just
+  // makes the button feel slow. Returns { status } ('invited' | 'already_member').
   const inviteToWorkspace = useCallback(async (workspaceId, email, role = "member") => {
     const { data, error } = await supabase.rpc("invite_to_workspace", {
       p_workspace_id: workspaceId,
@@ -519,26 +520,19 @@ export function BoardDataProvider({ children }) {
     });
     if (error) return { error };
     const status = data?.status ?? "invited";
-    if (status !== "invited") return { status };
 
-    let emailSent = false;
-    let emailError = null;
-    try {
-      const { data: fnData, error: fnError } = await supabase.functions.invoke("send-invite-email", {
-        body: {
-          workspaceId,
-          email,
-          role,
-          acceptUrl: `${window.location.origin}/dashboard`,
-        },
-      });
-      if (fnError) emailError = fnError.message;
-      else if (fnData?.sent) emailSent = true;
-      else emailError = fnData?.error ?? "Email not sent";
-    } catch (err) {
-      emailError = err?.message ?? "Email not sent";
+    if (status === "invited") {
+      // Fire-and-forget — don't await; log failures for debugging only.
+      supabase.functions
+        .invoke("send-invite-email", {
+          body: { workspaceId, email, role, acceptUrl: `${window.location.origin}/dashboard` },
+        })
+        .then(({ error: fnError }) => {
+          if (fnError) console.warn("send-invite-email failed:", fnError.message);
+        })
+        .catch((err) => console.warn("send-invite-email failed:", err));
     }
-    return { status, emailSent, emailError };
+    return { status };
   }, []);
 
   // Owner-only: change a member's role (RLS enforces owner).
