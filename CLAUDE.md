@@ -13,12 +13,21 @@ target" below. Code lives under `www/`:
   checklists/comments/assignees/labels/attachments all persist (attachments via a Supabase Storage bucket).
   Workspace member management + invitations and Realtime (board lists/cards + Inbox) are also wired — see
   "taskflow frontend architecture" below.
-- `www/admin-dashboard` — still the untouched Vite/React default template (a single placeholder `App.jsx`).
-  Not yet started.
+- `www/admin-dashboard` — a **read-only admin console** (React 19 + Vite + Tailwind v4; **no** React
+  Router — it's a single-page auth gate, not routed). Gated behind Supabase email/password auth **and** an
+  admin check: `context/AuthContext.jsx` resolves the session, then queries the `public.admins` table for
+  the caller's own row (tri-state `adminStatus` so the "access denied" screen never flashes mid-check).
+  `App.jsx` is the gate — `LoginPage` → `AccessDenied` (signed in, not admin) → `Dashboard`. The
+  `Dashboard` KPIs/chart/tables render **real instance-wide data** fetched via `lib/adminApi.js` →
+  the `public.admin_dashboard()` RPC (one JSON round-trip; see `supabase/db/admin_script.sql`), with
+  loading/error/refresh states. There is **no** mock-data file. The anon client can't read across
+  workspaces (RLS), so the RPC is `SECURITY DEFINER` + gated on `private.is_admin()` — the same
+  public-RPC/internal-gate pattern as the invite RPCs.
 
 Both have `@supabase/supabase-js` installed and a `src/lib/supabaseClient.js` reading `VITE_SUPABASE_URL` /
-`VITE_SUPABASE_ANON_KEY` from `.env` (gitignored; see `.env.example` for the shape). `www/taskflow` calls
-Supabase for real (auth + workspace queries/RPC); `www/admin-dashboard` has the client wired but unused.
+`VITE_SUPABASE_ANON_KEY` from `.env` (gitignored; see `.env.example` for the shape). Both call Supabase
+for real now: `www/taskflow` for auth + workspace queries/RPC, `www/admin-dashboard` for auth + the admin
+self-check against `public.admins`.
 
 Common commands (run from inside each project directory):
 
@@ -35,14 +44,12 @@ installed and run independently. Neither project has a test script configured.
 
 ## CI/CD
 
-Two GitHub Actions workflows under `.github/workflows/`, both scoped to `www/taskflow/**` path changes
-(`admin-dashboard` has no pipeline yet):
-
-- `taskflow-ci.yml` — on push to **any** branch and on PRs: `npm ci`, `npm run lint`, `npm run build`
-  (build needs `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`, supplied from repo secrets).
-- `taskflow-deploy.yml` — on push to `main` (or manual `workflow_dispatch`): builds, then deploys
-  `www/taskflow/dist` to **Cloudflare Pages** (project `taskflow`) via `wrangler-action`. Needs
-  `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets in addition to the Supabase ones.
+**There is currently no CI/CD.** The `.github/` directory does not exist — two workflows
+(`taskflow-ci.yml` = lint+build, `taskflow-deploy.yml` = Cloudflare Pages deploy of `www/taskflow/dist`)
+existed earlier but were **removed** in commit `618e8c4` ("these two files no longer in use"). Their
+history remains in git (`git log --all -- .github/`) if you need to restore or reference them, but nothing
+runs on push/PR today. Lint and build are manual (`npm run lint` / `npm run build` inside `www/taskflow`).
+If you re-add a pipeline, the build needs `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from repo secrets.
 
 ## Supabase backend
 
@@ -63,6 +70,26 @@ The Supabase project is named **TaskFlow** (ref `eyrxpgfwjoucgfjqinro`, region a
   owner-only, always queues a *pending* invite for an email; `list_my_invitations` — invites addressed to
   the caller by email, with workspace + inviter info; `accept_invitation`/`decline_invitation` — the
   invitee joins or discards). No auto-join: the invitee must accept.
+- `supabase/db/admin_script.sql` — the whole backend for `www/admin-dashboard` (admin auth gate **and**
+  its data source), in one file:
+  - `public.admins` table (a `user_id` per admin) with RLS that lets an authenticated user read **only
+    their own** row (so the client can self-check admin status) and **no** insert/update/delete policy —
+    admin can't be self-granted (only service_role / direct SQL adds one). This is why admin is a separate
+    write-locked table, not an `is_admin` column on `profiles`, which has a self-update policy. Plus the
+    `private.is_admin()` helper. The file carries **no seed** — grant the first admin by hand:
+    `insert into public.admins (user_id) select id from auth.users where email = '…';`.
+  - `public.admin_dashboard()` (SECURITY DEFINER, `search_path=''`, gated on `private.is_admin()`, EXECUTE
+    for `authenticated`/`service_role`) returns one jsonb blob: `stats` (workspaces/boards/users/cards
+    totals + 7d-vs-prior-7d delta + 7-day sparkline), `activity` (7-day cards/comments), `workspaces`
+    (top 8 by member count, with owner/members/boards/cards/created), and `recentUsers` (last 6 signups
+    from `auth.users` — email + derived active/invited/suspended status, readable only because the definer
+    bypasses RLS). The per-KPI `private._admin_stat(entity, label)` helper lives in `private` (allowlisted
+    table names for its dynamic SQL) so it isn't a REST endpoint.
+  - **⚠ Not applied to the remote via a recorded migration** — the MCP `apply_migration` was
+    permission-denied this session (production-deploy + admin-grant guardrail), so run this file by hand in
+    the Supabase SQL Editor, then `get_advisors` (security). Until it's applied, `admins`/`admin_dashboard`
+    don't exist and admin-dashboard login lands on "access denied" (missing table) or the dashboard shows a
+    load error (missing RPC).
 - `supabase/functions/` — placeholder for edge functions; empty so far.
 
 The workspace-membership section at the tail of `harden_functions.sql` (the `workspace_invitations` table
