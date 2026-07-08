@@ -1,11 +1,25 @@
-function App() {
+import { useAuth } from './context/AuthContext'
+import LoginPage from './components/LoginPage'
+import AccessDenied from './components/AccessDenied'
+import Dashboard from './components/Dashboard'
+
+function FullScreen({ children }) {
   return (
-    <div className="flex min-h-svh items-center justify-center bg-white dark:bg-gray-900">
-      <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
-        Admin Dashboard
-      </h1>
+    <div className="grid min-h-svh place-items-center bg-gray-50 text-sm text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+      {children}
     </div>
   )
 }
 
-export default App
+export default function App() {
+  const { loading, adminResolved, isAuthenticated, isAdmin } = useAuth()
+
+  // Resolving the initial session, or confirming admin status for a fresh sign-in.
+  if (loading || (isAuthenticated && !adminResolved)) {
+    return <FullScreen>Loading…</FullScreen>
+  }
+
+  if (!isAuthenticated) return <LoginPage />
+  if (!isAdmin) return <AccessDenied />
+  return <Dashboard />
+}
